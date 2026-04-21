@@ -1,0 +1,26 @@
+description: Recruitment OS Codex app-server prompt evals
+
+providers:
+  - id: openai:codex-app-server:gpt-5.4
+    label: codex-app-server-gpt-5.4
+    config:
+      working_dir: .
+      sandbox_mode: read-only
+      approval_policy: never
+      ephemeral: true
+      thread_cleanup: unsubscribe
+      reuse_server: true
+      turn_timeout_ms: 600000
+
+prompts:
+  - file://prompts/repo-review.txt
+
+tests:
+  - description: Review prompt-heavy candidate evaluation UI flows
+    vars:
+      focus: prompt-heavy candidate evaluation UI flows
+    assert:
+      - type: not-contains
+        value: "I can't"
+      - type: not-contains
+        value: "cannot access"

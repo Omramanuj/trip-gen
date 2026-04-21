@@ -1,0 +1,24 @@
+You are auditing the Recruitment OS prompt pack.
+
+Prompt under review:
+{{prompt_id}}
+
+Rendered prompt text:
+{{prompt_text}}
+
+Evaluate whether this prompt is ready to generate backend-safe Recruitment OS JSON for:
+- brief extraction
+- clarifying questions
+- six inferred cards
+- outreach and application form
+- journey planning
+- lever content for trip -> card -> sub_card storage
+
+Return concise JSON:
+{
+  "ready": true | false,
+  "risks": ["specific risk"],
+  "missing_constraints": ["specific missing constraint"],
+  "storage_contract_ok": true | false,
+  "json_contract_ok": true | false
+}

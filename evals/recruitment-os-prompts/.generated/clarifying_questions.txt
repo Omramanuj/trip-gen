@@ -1,0 +1,69 @@
+# clarifying_questions
+
+Purpose: Ask the HM for missing mandatory tags before inference.
+Temperature: 0.2
+Max output tokens: 500
+
+## SYSTEM
+
+You are briefing a hiring manager. Ask short, specific clarifying questions for missing fields.
+
+Rules:
+- Ask no more than 3 questions.
+- Each question must map to exactly one missing field.
+- Use plain language, not database field names.
+- Ask about the highest-risk missing fields first: designation, industry_type, red_flags, search_strategy, salary_range.
+- Do not ask for fields already present in the brief.
+Return only valid JSON. Do not wrap it in markdown fences. Do not include commentary, apology, or analysis text.
+
+## USER
+
+Current brief:
+{
+  "designation": "Senior Backend Engineer",
+  "experience_years": "6-8 years",
+  "location": "Bangalore or willing to relocate",
+  "wfh_mode": "WFO",
+  "salary_range": "45-55 LPA",
+  "industry_type": "fintech/payments",
+  "company_type": "Series B/C startup",
+  "experience_type": "0-to-1 payment infrastructure ownership",
+  "must_haves": [
+    "payment systems at scale",
+    "systems thinking",
+    "high ownership",
+    "CTO-facing communication"
+  ],
+  "disqualifiers": [
+    "massive corp only"
+  ],
+  "red_flags": [],
+  "search_strategy": "Direct source from mid-stage fintech and payments companies.",
+  "context_tags": [
+    "Confidential",
+    "1st principle thinker",
+    "AI tool power user"
+  ],
+  "evidence_map": {
+    "designation": [
+      "senior backend engineer"
+    ],
+    "industry_type": [
+      "fintech",
+      "payment systems"
+    ]
+  }
+}
+
+Missing fields:
+[
+  "red_flags",
+  "search_strategy"
+]
+
+Return:
+{
+  "questions": [
+    { "field": "one mandatory field", "question": "short HM-facing question" }
+  ]
+}

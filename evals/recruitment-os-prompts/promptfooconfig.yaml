@@ -1,0 +1,61 @@
+description: Recruitment OS prompt-pack validation
+
+providers:
+  - id: openai:codex-app-server:gpt-5.4
+    label: codex-app-server-gpt-5.4
+    config:
+      working_dir: .
+      sandbox_mode: read-only
+      approval_policy: never
+      ephemeral: true
+      thread_cleanup: unsubscribe
+      reuse_server: true
+      turn_timeout_ms: 600000
+
+prompts:
+  - file://prompts/audit-prompt-pack.txt
+
+tests:
+  - description: Brief extraction prompt has mandatory fields and JSON-only contract
+    vars:
+      prompt_id: brief_extraction
+      prompt_text: file://.generated/brief_extraction.txt
+    assert:
+      - type: is-json
+      - type: contains
+        value: '"ready"'
+      - type: contains
+        value: '"json_contract_ok"'
+
+  - description: Inference cards prompt preserves six-card contract
+    vars:
+      prompt_id: inference_cards
+      prompt_text: file://.generated/inference_cards.txt
+    assert:
+      - type: is-json
+      - type: contains
+        value: '"storage_contract_ok"'
+      - type: not-contains
+        value: journey_templates
+
+  - description: Journey planner prompt uses lever_id and supported lever set
+    vars:
+      prompt_id: journey_planner
+      prompt_text: file://.generated/journey_planner.txt
+    assert:
+      - type: is-json
+      - type: contains
+        value: '"ready"'
+      - type: not-contains
+        value: lever_type
+
+  - description: Assignment lever prompt matches trip card sub-card storage contract
+    vars:
+      prompt_id: lever_content_assignment
+      prompt_text: file://.generated/lever_content_assignment.txt
+    assert:
+      - type: is-json
+      - type: contains
+        value: '"storage_contract_ok"'
+      - type: not-contains
+        value: journey_templates

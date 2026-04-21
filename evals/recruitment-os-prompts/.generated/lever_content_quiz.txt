@@ -1,0 +1,251 @@
+# lever_content_quiz
+
+Purpose: Generate DB-ready card_template and sub_card_templates for quiz.
+Temperature: 0.25
+Max output tokens: 2200
+
+## SYSTEM
+
+Recruitment OS turns a hiring manager's rough role signals into:
+1. mandatory clarifying questions,
+2. six inferred role cards,
+3. Journey 1 application form and outreach,
+4. evaluation journeys stored as trip -> card -> sub_card templates.
+
+Storage contract for generated evaluation content:
+- one trip has multiple card_templates rows
+- card_templates.lever_id must be one of: quiz, rapid_fire, assignment, demo
+- each card has ordered sub_card_templates rows
+- sub_card_templates.sub_card_type must be briefing, task, reflection, or transition
+- sub_card_templates.interaction_type must be display, ordered_steps, choice_buttons, short_text, long_text, or file_upload
+
+Generate DB-ready evaluation content for exactly one card.
+
+Skill and depth context:
+- Every evaluation journey must be grounded in: domain, skill, sub_skill, context band, and complexity rung.
+- Skill decomposition should produce observable micro-skills, not generic traits.
+- Knowledge slices: D = declarative know-what, P = procedural know-how, C = conditional know-when/why.
+- Context bands: Band 1 familiar/low ambiguity, Band 2 cross-team/moderate ambiguity, Band 3 novel or high-stakes shifting constraints, Band 4 cross-domain/systemic implications.
+- Complexity rungs: Rung A clean inputs/single objective, Rung B messy inputs or 2-3 conflicting constraints, Rung C multiple stakeholders or hidden constraints, Rung D moving target or mid-course changes, Rung E systemic/second-order effects.
+- Depth anchors: L1 Foundational = explains/follows templates, L2 Functional = applies independently, L3 Advanced = adapts under ambiguity, L4 Mastery = sets standards or creates system-level impact.
+- More experience should raise complexity rung, not widen domain.
+- Higher expertise should widen context band, not make mechanics artificially harder.
+- Each lever should focus on max 1-2 micro-skills so evidence is interpretable.
+
+Supported v1 lever taxonomy:
+- assignment maps to L1 Task / Assignment: async, applied execution in scoped context, typical depth L2-L3, max 10 minutes.
+- demo maps to L2 Sketch / Demo Your Work: async, procedural fluency and tacit know-how, typical depth L2-L4, max 15 minutes.
+- quiz maps to L3 Rank & Rationalize Responses or L6 SJT-style choice tasks: async, reasoning, discrimination, and contextual judgment, typical depth L2-L3, max 8-15 minutes.
+- rapid_fire maps to L5 Rapid Fire Serious/Joking: sync-like timed interaction, reflexes, values, and instincts, typical depth L2-L4, max 8 minutes.
+Future levers L4, L7-L15 are not emitted in v1 unless represented as placeholder text inside an existing supported lever.
+
+Universal rules:
+- Output one card_template and ordered sub_card_templates.
+- card_template.lever_id must equal the requested lever.
+- Use sequence_index starting at 1 for sub_card_templates.
+- Every response_expected=true sub-card must be answerable by the current runtime interaction_type.
+- Keep mobile-safe copy short.
+- Use the confirmed journey.skill_frame when present. If absent, infer the smallest usable frame from approved inference cards.
+- Scenario framing must be realistic and role-aligned, with no trick wording.
+- Declare explicit non-signals in body_json where useful, such as not judging accent, polish, or visual design.
+- Body content should reveal evidence for behavior patterns, judgment quality, error recovery, and transfer evidence without using scoring language.
+- Do not include markdown.
+- Do not create fields outside the requested JSON shape unless they belong inside body_json or rubric_json.
+
+Quiz rules:
+- Maps to L3 Rank & Rationalize Responses or L6 SJT depending on the skill_frame.
+- Use for reasoning, discrimination quality, prioritization, and contextual judgment.
+- Prefer scenarios with realistic AI-generated responses/options when testing judgment.
+- Target D+P+C where possible: concept recognition, method choice, and when/why trade-offs.
+- sub_card 1: briefing/display, response_expected=false, body_json { prompt, subtitle, rules, start_label }
+- Generate 4-6 task/choice_buttons questions.
+- Use selection_mode="single" for v1 runtime compatibility.
+- Max 4 options per question.
+- body_json per question { prompt, options, selection_mode, correct_answer, supporting_text }.
+
+
+
+Return only valid JSON. Do not wrap it in markdown fences. Do not include commentary, apology, or analysis text.
+
+## USER
+
+Brief:
+{
+  "designation": "Senior Backend Engineer",
+  "experience_years": "6-8 years",
+  "location": "Bangalore or willing to relocate",
+  "wfh_mode": "WFO",
+  "salary_range": "45-55 LPA",
+  "industry_type": "fintech/payments",
+  "company_type": "Series B/C startup",
+  "experience_type": "0-to-1 payment infrastructure ownership",
+  "must_haves": [
+    "payment systems at scale",
+    "systems thinking",
+    "high ownership",
+    "CTO-facing communication"
+  ],
+  "disqualifiers": [
+    "massive corp only"
+  ],
+  "red_flags": [
+    "pure feature builder",
+    "no system-level ownership"
+  ],
+  "search_strategy": "Direct source from mid-stage fintech and payments companies.",
+  "context_tags": [
+    "Confidential",
+    "1st principle thinker",
+    "AI tool power user"
+  ],
+  "evidence_map": {
+    "designation": [
+      "senior backend engineer"
+    ],
+    "industry_type": [
+      "fintech",
+      "payment systems"
+    ]
+  }
+}
+
+Approved inference cards:
+{
+  "ideal_candidate": {
+    "content": "A senior backend engineer from a mid-stage fintech/payments environment who has owned payment infrastructure and can work directly with the CTO.",
+    "confidence": "inferred",
+    "provenance": "payment systems at scale + Series B/C + CTO-facing ownership"
+  },
+  "location_comp": {
+    "content": "Bangalore or relocation | 45-55 LPA | WFO",
+    "confidence": "verified",
+    "provenance": "explicit brief constraints"
+  },
+  "teachable_vs_innate": {
+    "already_exist": [
+      "payment systems at scale",
+      "systems thinking",
+      "high ownership"
+    ],
+    "can_be_taught": [
+      "internal tooling",
+      "company-specific compliance",
+      "team rituals"
+    ],
+    "provenance": "must own payment infrastructure"
+  },
+  "must_haves_red_flags": {
+    "must_haves": [
+      "payment systems at scale",
+      "systems thinking",
+      "CTO-facing communication"
+    ],
+    "red_flags": [
+      "pure feature builder",
+      "massive corp only"
+    ],
+    "provenance": "explicit and inferred from brief"
+  },
+  "search_playbook": {
+    "content": "Source from Razorpay, Cashfree, Pine Labs, Juspay, and adjacent fintech infra teams.",
+    "target_companies": [
+      "Razorpay",
+      "Cashfree",
+      "Pine Labs",
+      "Juspay"
+    ],
+    "avoid_companies_or_pools": [
+      "large legacy IT services",
+      "pure MNC feature teams"
+    ],
+    "provenance": "fintech/payments + not massive corp"
+  },
+  "skill_table": {
+    "core": [
+      "distributed systems",
+      "payment architecture",
+      "backend ownership"
+    ],
+    "micro": [
+      "idempotency",
+      "ledger correctness",
+      "failure recovery",
+      "high-throughput APIs"
+    ],
+    "domain": "fintech payments infrastructure",
+    "primary_skill": "Designing resilient payment systems",
+    "sub_skills": [
+      "idempotency design",
+      "failure recovery",
+      "ledger correctness"
+    ],
+    "target_band": "3",
+    "target_rung": "C",
+    "provenance": "payment infra ownership"
+  },
+  "tension_cards": [
+    {
+      "title": "TIMELINE VS SCARCITY",
+      "body": "The 6-week timeline is tight for passive senior fintech infrastructure candidates.",
+      "tradeoffs": [
+        "Broaden adjacent fintech infra",
+        "Increase outbound volume",
+        "Relax WFO requirement"
+      ]
+    }
+  ]
+}
+
+Confirmed journey:
+{
+  "journey_number": 2,
+  "title": "Payment Failure Recovery Work Sample",
+  "description": "Validate how the candidate reasons through payment failure modes and operational recovery.",
+  "lever_id": "quiz",
+  "lever_rationale": "A written work sample checks depth without asking for a long take-home.",
+  "structure_hint": "Brief, written response, optional proof upload.",
+  "target_signals": [
+    "idempotency",
+    "failure recovery",
+    "ledger correctness"
+  ],
+  "skill_frame": {
+    "domain": "fintech payments infrastructure",
+    "skill": "Designing resilient payment systems",
+    "sub_skill": "idempotency design",
+    "band": "3",
+    "rung": "C",
+    "target_depth": "L2-L3",
+    "knowledge_slice": [
+      "P",
+      "C"
+    ]
+  },
+  "estimated_minutes": 10,
+  "dropout_risk": "medium",
+  "hm_constraint": "Focus on payment idempotency. Keep under 10 minutes."
+}
+
+Return:
+{
+  "card_template": {
+    "lever_id": "quiz",
+    "title": string,
+    "instruction": string,
+    "time_cap_seconds": number,
+    "required": true,
+    "is_enabled": true,
+    "rubric_json": { "signals": string[], "scoring": string }
+  },
+  "sub_card_templates": [
+    {
+      "sequence_index": number,
+      "sub_card_type": "briefing|task|reflection|transition",
+      "interaction_type": "display|ordered_steps|choice_buttons|short_text|long_text|file_upload",
+      "title": string,
+      "body_text": string | null,
+      "response_expected": boolean,
+      "body_json": object
+    }
+  ]
+}

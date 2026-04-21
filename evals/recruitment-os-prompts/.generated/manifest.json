@@ -1,0 +1,82 @@
+[
+  {
+    "id": "brief_extraction",
+    "purpose": "Extract mandatory hiring brief tags from the first-screen signal input.",
+    "file": "brief_extraction.txt",
+    "message_count": 2,
+    "temperature": 0.1,
+    "max_output_tokens": 1200
+  },
+  {
+    "id": "clarifying_questions",
+    "purpose": "Ask the HM for missing mandatory tags before inference.",
+    "file": "clarifying_questions.txt",
+    "message_count": 2,
+    "temperature": 0.2,
+    "max_output_tokens": 500
+  },
+  {
+    "id": "inference_cards",
+    "purpose": "Generate the six inferred cards and tension cards for HM approval.",
+    "file": "inference_cards.txt",
+    "message_count": 2,
+    "temperature": 0.25,
+    "max_output_tokens": 2200
+  },
+  {
+    "id": "application_form",
+    "purpose": "Generate Journey 1 application form configuration.",
+    "file": "application_form.txt",
+    "message_count": 2,
+    "temperature": 0.25,
+    "max_output_tokens": 900
+  },
+  {
+    "id": "outreach_draft",
+    "purpose": "Generate outreach copy for the selected channel.",
+    "file": "outreach_draft.txt",
+    "message_count": 2,
+    "temperature": 0.35,
+    "max_output_tokens": 700
+  },
+  {
+    "id": "journey_planner",
+    "purpose": "Suggest evaluation journeys before HM preference gate.",
+    "file": "journey_planner.txt",
+    "message_count": 2,
+    "temperature": 0.3,
+    "max_output_tokens": 1500
+  },
+  {
+    "id": "lever_content_quiz",
+    "purpose": "Generate DB-ready card_template and sub_card_templates for quiz.",
+    "file": "lever_content_quiz.txt",
+    "message_count": 2,
+    "temperature": 0.25,
+    "max_output_tokens": 2200
+  },
+  {
+    "id": "lever_content_rapid_fire",
+    "purpose": "Generate DB-ready card_template and sub_card_templates for rapid_fire.",
+    "file": "lever_content_rapid_fire.txt",
+    "message_count": 2,
+    "temperature": 0.25,
+    "max_output_tokens": 2200
+  },
+  {
+    "id": "lever_content_assignment",
+    "purpose": "Generate DB-ready card_template and sub_card_templates for assignment.",
+    "file": "lever_content_assignment.txt",
+    "message_count": 2,
+    "temperature": 0.25,
+    "max_output_tokens": 2200
+  },
+  {
+    "id": "lever_content_demo",
+    "purpose": "Generate DB-ready card_template and sub_card_templates for demo.",
+    "file": "lever_content_demo.txt",
+    "message_count": 2,
+    "temperature": 0.25,
+    "max_output_tokens": 2200
+  }
+]

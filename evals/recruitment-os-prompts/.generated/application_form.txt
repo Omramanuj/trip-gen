@@ -1,0 +1,169 @@
+# application_form
+
+Purpose: Generate Journey 1 application form configuration.
+Temperature: 0.25
+Max output tokens: 900
+
+## SYSTEM
+
+You design the first application form for passive candidates.
+
+Rules:
+- Journey 1 is always an application form, not a trip lever.
+- Keep friction low.
+- Include standard fields as booleans.
+- Generate 1-3 custom audio questions that screen must-haves or red flags.
+- Each audio question must be answerable in 45-180 seconds.
+- Do not ask illegal, demographic, or protected-class questions.
+Return only valid JSON. Do not wrap it in markdown fences. Do not include commentary, apology, or analysis text.
+
+## USER
+
+Brief:
+{
+  "designation": "Senior Backend Engineer",
+  "experience_years": "6-8 years",
+  "location": "Bangalore or willing to relocate",
+  "wfh_mode": "WFO",
+  "salary_range": "45-55 LPA",
+  "industry_type": "fintech/payments",
+  "company_type": "Series B/C startup",
+  "experience_type": "0-to-1 payment infrastructure ownership",
+  "must_haves": [
+    "payment systems at scale",
+    "systems thinking",
+    "high ownership",
+    "CTO-facing communication"
+  ],
+  "disqualifiers": [
+    "massive corp only"
+  ],
+  "red_flags": [
+    "pure feature builder",
+    "no system-level ownership"
+  ],
+  "search_strategy": "Direct source from mid-stage fintech and payments companies.",
+  "context_tags": [
+    "Confidential",
+    "1st principle thinker",
+    "AI tool power user"
+  ],
+  "evidence_map": {
+    "designation": [
+      "senior backend engineer"
+    ],
+    "industry_type": [
+      "fintech",
+      "payment systems"
+    ]
+  }
+}
+
+Approved inference cards:
+{
+  "ideal_candidate": {
+    "content": "A senior backend engineer from a mid-stage fintech/payments environment who has owned payment infrastructure and can work directly with the CTO.",
+    "confidence": "inferred",
+    "provenance": "payment systems at scale + Series B/C + CTO-facing ownership"
+  },
+  "location_comp": {
+    "content": "Bangalore or relocation | 45-55 LPA | WFO",
+    "confidence": "verified",
+    "provenance": "explicit brief constraints"
+  },
+  "teachable_vs_innate": {
+    "already_exist": [
+      "payment systems at scale",
+      "systems thinking",
+      "high ownership"
+    ],
+    "can_be_taught": [
+      "internal tooling",
+      "company-specific compliance",
+      "team rituals"
+    ],
+    "provenance": "must own payment infrastructure"
+  },
+  "must_haves_red_flags": {
+    "must_haves": [
+      "payment systems at scale",
+      "systems thinking",
+      "CTO-facing communication"
+    ],
+    "red_flags": [
+      "pure feature builder",
+      "massive corp only"
+    ],
+    "provenance": "explicit and inferred from brief"
+  },
+  "search_playbook": {
+    "content": "Source from Razorpay, Cashfree, Pine Labs, Juspay, and adjacent fintech infra teams.",
+    "target_companies": [
+      "Razorpay",
+      "Cashfree",
+      "Pine Labs",
+      "Juspay"
+    ],
+    "avoid_companies_or_pools": [
+      "large legacy IT services",
+      "pure MNC feature teams"
+    ],
+    "provenance": "fintech/payments + not massive corp"
+  },
+  "skill_table": {
+    "core": [
+      "distributed systems",
+      "payment architecture",
+      "backend ownership"
+    ],
+    "micro": [
+      "idempotency",
+      "ledger correctness",
+      "failure recovery",
+      "high-throughput APIs"
+    ],
+    "domain": "fintech payments infrastructure",
+    "primary_skill": "Designing resilient payment systems",
+    "sub_skills": [
+      "idempotency design",
+      "failure recovery",
+      "ledger correctness"
+    ],
+    "target_band": "3",
+    "target_rung": "C",
+    "provenance": "payment infra ownership"
+  },
+  "tension_cards": [
+    {
+      "title": "TIMELINE VS SCARCITY",
+      "body": "The 6-week timeline is tight for passive senior fintech infrastructure candidates.",
+      "tradeoffs": [
+        "Broaden adjacent fintech infra",
+        "Increase outbound volume",
+        "Relax WFO requirement"
+      ]
+    }
+  ]
+}
+
+Return:
+{
+  "journey_number": 1,
+  "title": "Application Form & Initial Context",
+  "description": string,
+  "dropout_risk": "low|medium|high",
+  "standard_fields": {
+    "resume_cv": boolean,
+    "linkedin_url": boolean,
+    "github_portfolio": boolean,
+    "current_ctc": boolean
+  },
+  "custom_audio_questions": [
+    {
+      "text": string,
+      "response_type": "audio",
+      "duration_seconds": number,
+      "target_signal": string
+    }
+  ]
+}

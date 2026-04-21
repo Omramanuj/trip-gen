@@ -1,0 +1,10 @@
+You are reviewing the Recruitment OS frontend package.
+
+Focus area: {{focus}}
+
+Inspect the local repository context available to Codex and return:
+1. The highest-risk prompt or candidate-evaluation UX paths.
+2. Specific files or components that should be reviewed first.
+3. A short list of follow-up eval prompts we should add next.
+
+Keep the answer concise and grounded in files that actually exist.
