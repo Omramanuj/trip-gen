@@ -9,6 +9,7 @@ import {
   type PromptSpec,
 } from '../prompts/recruitmentOsPrompts';
 import { BriefExtraction, InferenceCards, mandatoryBriefFields } from '../prompts/recruitmentOsSchemas';
+import { readPromptLabResponse } from '../lib/promptLabClient';
 
 interface CrystallizationProps {
   inputText: string;
@@ -42,7 +43,7 @@ async function runPrompt(spec: PromptSpec) {
     }),
   }).finally(() => window.clearTimeout(timeout));
 
-  const payload = await response.json();
+  const payload = await readPromptLabResponse(response);
 
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || `Prompt run failed with ${response.status}`);

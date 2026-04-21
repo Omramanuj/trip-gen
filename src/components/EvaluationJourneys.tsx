@@ -8,6 +8,7 @@ import {
   type PromptSpec,
 } from '../prompts/recruitmentOsPrompts';
 import { approvedInferenceCards, extractedFintechBrief } from '../prompts/recruitmentOsFixtures';
+import { readPromptLabResponse } from '../lib/promptLabClient';
 
 interface EvaluationJourneysProps {
   trips: TripProposalData[];
@@ -73,7 +74,7 @@ async function runPrompt(spec: PromptSpec) {
     }),
   });
 
-  const payload = await response.json();
+  const payload = await readPromptLabResponse(response);
 
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || `Prompt run failed with ${response.status}`);

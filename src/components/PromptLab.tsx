@@ -17,6 +17,7 @@ import {
   fintechBackendBrief,
 } from '../prompts/recruitmentOsFixtures';
 import { leverIds } from '../prompts/recruitmentOsSchemas';
+import { readPromptLabResponse } from '../lib/promptLabClient';
 
 type PromptCaseId =
   | 'brief_extraction'
@@ -522,7 +523,7 @@ export function PromptLab() {
         }),
       });
 
-      const payload = await response.json();
+      const payload = await readPromptLabResponse(response);
 
       if (!response.ok || !payload.ok) {
         throw new Error(payload.error || `Prompt run failed with ${response.status}`);
