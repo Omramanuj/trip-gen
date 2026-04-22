@@ -1,13 +1,18 @@
 function transcriptionSessionConfig() {
+  const transcription = {
+    model: process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe',
+    language: process.env.OPENAI_TRANSCRIBE_LANGUAGE || 'en',
+  };
+
+  if (process.env.OPENAI_TRANSCRIBE_PROMPT) {
+    transcription.prompt = process.env.OPENAI_TRANSCRIBE_PROMPT;
+  }
+
   return {
     type: 'transcription',
     audio: {
       input: {
-        transcription: {
-          model: process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe',
-          language: process.env.OPENAI_TRANSCRIBE_LANGUAGE || 'en',
-          prompt: process.env.OPENAI_TRANSCRIBE_PROMPT || 'Recruitment role brief with job title, experience, location, work mode, salary, skills, constraints, and search strategy.',
-        },
+        transcription,
         turn_detection: {
           type: 'server_vad',
           threshold: Number(process.env.OPENAI_TRANSCRIBE_VAD_THRESHOLD || 0.5),
