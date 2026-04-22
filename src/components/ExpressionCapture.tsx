@@ -70,7 +70,6 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const baseInputRef = useRef('');
-  const completedTranscriptsRef = useRef<string[]>([]);
   const activeTranscriptsRef = useRef<Record<string, string>>({});
   const coverage = useMemo(() => fastExtractBriefCoverage(inputText), [inputText]);
 
@@ -96,10 +95,8 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
   };
 
   const renderRealtimeTranscript = () => {
-    const completed = completedTranscriptsRef.current.join(' ');
     const active = Object.values(activeTranscriptsRef.current).join(' ');
-    const liveTranscript = appendVoiceText(completed, active);
-    setInputText(appendVoiceText(baseInputRef.current, liveTranscript));
+    setInputText(appendVoiceText(baseInputRef.current, active));
   };
 
   const stopListening = () => {
@@ -122,9 +119,10 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
 
     if (event.type === 'conversation.item.input_audio_transcription.completed') {
       const itemId = event.item_id || 'active';
+      const finalTranscript = event.transcript?.trim() || activeTranscriptsRef.current[itemId]?.trim() || '';
       delete activeTranscriptsRef.current[itemId];
-      if (event.transcript?.trim()) {
-        completedTranscriptsRef.current = [...completedTranscriptsRef.current, event.transcript.trim()];
+      if (finalTranscript) {
+        baseInputRef.current = appendVoiceText(baseInputRef.current, finalTranscript);
       }
       renderRealtimeTranscript();
       return;
@@ -157,7 +155,6 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
 
     setVoiceError('');
     baseInputRef.current = inputText;
-    completedTranscriptsRef.current = [];
     activeTranscriptsRef.current = {};
     setIsListening(true);
 
@@ -295,7 +292,6 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
                 setInputText(e.target.value);
                 if (isListening) {
                   baseInputRef.current = e.target.value;
-                  completedTranscriptsRef.current = [];
                   activeTranscriptsRef.current = {};
                 }
               }}
