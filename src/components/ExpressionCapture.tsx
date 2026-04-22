@@ -65,6 +65,7 @@ type SpeechRecognitionLike = EventTarget & {
 };
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+type VoiceRestartReason = 'network' | 'ended';
 
 declare global {
   interface Window {
@@ -74,6 +75,7 @@ declare global {
 }
 
 const getSpeechRecognition = () => window.SpeechRecognition || window.webkitSpeechRecognition;
+const VOICE_RESTART_DELAY_MS = 300;
 
 const appendVoiceText = (baseText: string, voiceText: string) => {
   const cleanVoiceText = voiceText.trim();
@@ -94,6 +96,7 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
   const shouldListenRef = useRef(false);
   const baseInputRef = useRef('');
   const committedTranscriptRef = useRef('');
+  const restartTimerRef = useRef<number | null>(null);
   const coverage = useMemo(() => fastExtractBriefCoverage(inputText), [inputText]);
 
   useEffect(() => {
@@ -101,6 +104,9 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
 
     return () => {
       shouldListenRef.current = false;
+      if (restartTimerRef.current !== null) {
+        window.clearTimeout(restartTimerRef.current);
+      }
       recognitionRef.current?.stop();
     };
   }, []);
@@ -116,8 +122,33 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
     setInputText(MOCK_INPUT);
   };
 
+  const scheduleVoiceRestart = (recognition: SpeechRecognitionLike, reason: VoiceRestartReason) => {
+    if (!shouldListenRef.current) return;
+    if (restartTimerRef.current !== null) return;
+
+    restartTimerRef.current = window.setTimeout(() => {
+      restartTimerRef.current = null;
+      if (!shouldListenRef.current) return;
+
+      try {
+        recognition.start();
+        if (reason === 'network') {
+          setVoiceError('Voice input reconnected after a network interruption.');
+        }
+      } catch {
+        setIsListening(false);
+        shouldListenRef.current = false;
+        setVoiceError('Voice input could not restart. Tap the mic to try again.');
+      }
+    }, VOICE_RESTART_DELAY_MS);
+  };
+
   const stopListening = () => {
     shouldListenRef.current = false;
+    if (restartTimerRef.current !== null) {
+      window.clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
     setIsListening(false);
     recognitionRef.current?.stop();
   };
@@ -180,18 +211,17 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
         return;
       }
 
+      if (error === 'network') {
+        setVoiceError('Voice input had a network interruption. Reconnecting...');
+        scheduleVoiceRestart(recognition, 'network');
+        return;
+      }
+
       setVoiceError(`Voice input stopped: ${error}.`);
     };
 
     recognition.onend = () => {
-      if (!shouldListenRef.current) return;
-
-      try {
-        recognition.start();
-      } catch {
-        setIsListening(false);
-        shouldListenRef.current = false;
-      }
+      scheduleVoiceRestart(recognition, 'ended');
     };
 
     recognitionRef.current = recognition;
