@@ -18,7 +18,7 @@ function transcriptionSessionConfig() {
           type: 'server_vad',
           threshold: Number(process.env.OPENAI_TRANSCRIBE_VAD_THRESHOLD || 0.5),
           prefix_padding_ms: 300,
-          silence_duration_ms: 500,
+          silence_duration_ms: Number(process.env.OPENAI_TRANSCRIBE_SILENCE_MS || 250),
         },
       },
     },

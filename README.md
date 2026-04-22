@@ -34,6 +34,7 @@ OPENROUTER_TIMEOUT_MS="90000"
 OPENAI_API_KEY="your_openai_key"
 OPENAI_TRANSCRIBE_MODEL="gpt-4o-mini-transcribe"
 OPENAI_TRANSCRIBE_LANGUAGE="en"
+OPENAI_TRANSCRIBE_SILENCE_MS="250"
 ```
 
 Start the combined frontend + API server:
