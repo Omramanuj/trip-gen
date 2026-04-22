@@ -1,28 +1,4 @@
-function transcriptionSessionConfig() {
-  const transcription = {
-    model: process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe',
-    language: process.env.OPENAI_TRANSCRIBE_LANGUAGE || 'en',
-  };
-
-  if (process.env.OPENAI_TRANSCRIBE_PROMPT) {
-    transcription.prompt = process.env.OPENAI_TRANSCRIBE_PROMPT;
-  }
-
-  return {
-    type: 'transcription',
-    audio: {
-      input: {
-        transcription,
-        turn_detection: {
-          type: 'server_vad',
-          threshold: Number(process.env.OPENAI_TRANSCRIBE_VAD_THRESHOLD || 0.5),
-          prefix_padding_ms: 300,
-          silence_duration_ms: Number(process.env.OPENAI_TRANSCRIBE_SILENCE_MS || 150),
-        },
-      },
-    },
-  };
-}
+import { realtimeTranscriptionSessionConfig } from './_transcriptionConfig.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -44,7 +20,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        session: transcriptionSessionConfig(),
+        session: realtimeTranscriptionSessionConfig(),
       }),
     });
 

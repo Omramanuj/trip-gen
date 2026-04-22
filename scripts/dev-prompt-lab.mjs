@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createServer as createViteServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { realtimeTranscriptionSessionConfig } from '../api/realtime/_transcriptionConfig.js';
 
 const port = Number(process.env.PORT || 3000);
 const defaultFastModel = process.env.OPENROUTER_FAST_MODEL || 'openai/gpt-4o-mini';
@@ -201,33 +202,9 @@ async function main() {
         return;
       }
 
-      const transcription = {
-        model: process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe',
-        language: process.env.OPENAI_TRANSCRIBE_LANGUAGE || 'en',
-      };
-
-      if (process.env.OPENAI_TRANSCRIBE_PROMPT) {
-        transcription.prompt = process.env.OPENAI_TRANSCRIBE_PROMPT;
-      }
-
-      const sessionConfig = {
-        type: 'transcription',
-        audio: {
-          input: {
-            transcription,
-            turn_detection: {
-              type: 'server_vad',
-              threshold: Number(process.env.OPENAI_TRANSCRIBE_VAD_THRESHOLD || 0.5),
-              prefix_padding_ms: 300,
-              silence_duration_ms: Number(process.env.OPENAI_TRANSCRIBE_SILENCE_MS || 150),
-            },
-          },
-        },
-      };
-
       const formData = new FormData();
       formData.set('sdp', req.body);
-      formData.set('session', JSON.stringify(sessionConfig));
+      formData.set('session', JSON.stringify(realtimeTranscriptionSessionConfig()));
 
       const response = await fetch('https://api.openai.com/v1/realtime/calls', {
         method: 'POST',
@@ -256,37 +233,13 @@ async function main() {
         return;
       }
 
-      const transcription = {
-        model: process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe',
-        language: process.env.OPENAI_TRANSCRIBE_LANGUAGE || 'en',
-      };
-
-      if (process.env.OPENAI_TRANSCRIBE_PROMPT) {
-        transcription.prompt = process.env.OPENAI_TRANSCRIBE_PROMPT;
-      }
-
-      const sessionConfig = {
-        type: 'transcription',
-        audio: {
-          input: {
-            transcription,
-            turn_detection: {
-              type: 'server_vad',
-              threshold: Number(process.env.OPENAI_TRANSCRIBE_VAD_THRESHOLD || 0.5),
-              prefix_padding_ms: 300,
-              silence_duration_ms: Number(process.env.OPENAI_TRANSCRIBE_SILENCE_MS || 150),
-            },
-          },
-        },
-      };
-
       const response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ session: sessionConfig }),
+        body: JSON.stringify({ session: realtimeTranscriptionSessionConfig() }),
       });
 
       const payload = await response.json().catch(() => null);

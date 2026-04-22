@@ -1,34 +1,10 @@
+import { realtimeTranscriptionSessionConfig } from './_transcriptionConfig.js';
+
 export const config = {
   api: {
     bodyParser: false,
   },
 };
-
-function transcriptionSessionConfig() {
-  const transcription = {
-    model: process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe',
-    language: process.env.OPENAI_TRANSCRIBE_LANGUAGE || 'en',
-  };
-
-  if (process.env.OPENAI_TRANSCRIBE_PROMPT) {
-    transcription.prompt = process.env.OPENAI_TRANSCRIBE_PROMPT;
-  }
-
-  return {
-    type: 'transcription',
-    audio: {
-      input: {
-        transcription,
-        turn_detection: {
-          type: 'server_vad',
-          threshold: Number(process.env.OPENAI_TRANSCRIBE_VAD_THRESHOLD || 0.5),
-          prefix_padding_ms: 300,
-          silence_duration_ms: Number(process.env.OPENAI_TRANSCRIBE_SILENCE_MS || 150),
-        },
-      },
-    },
-  };
-}
 
 async function readRequestBody(req) {
   if (typeof req.body === 'string') return req.body;
@@ -62,7 +38,7 @@ export default async function handler(req, res) {
 
     const formData = new FormData();
     formData.set('sdp', sdp);
-    formData.set('session', JSON.stringify(transcriptionSessionConfig()));
+    formData.set('session', JSON.stringify(realtimeTranscriptionSessionConfig()));
 
     const response = await fetch('https://api.openai.com/v1/realtime/calls', {
       method: 'POST',
