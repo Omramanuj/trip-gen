@@ -50,7 +50,7 @@ http://localhost:3000/
 
 Go to **Prompt Lab**, pick a prompt case, edit the JSON input, and click **Run LLM**. The frontend sends the actual rendered system/user messages to `/api/prompt-lab/run`; the API calls OpenRouter server-side so the key is not exposed in the browser.
 
-The **Describe the role** mic button uses OpenAI Realtime transcription over WebRTC. The browser streams microphone audio through `/api/realtime/transcription-session`, which signs the session server-side with `OPENAI_API_KEY`; the key is never exposed to the browser.
+The **Describe the role** mic button uses OpenAI Realtime transcription over WebRTC. The browser requests a short-lived Realtime token from `/api/realtime/transcription-token`, then streams microphone audio directly to OpenAI over WebRTC; the long-lived `OPENAI_API_KEY` is never exposed to the browser.
 
 ## Prompt Evals
 

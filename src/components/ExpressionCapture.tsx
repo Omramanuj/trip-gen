@@ -45,6 +45,12 @@ type RealtimeTranscriptionEvent = {
   };
 };
 
+type RealtimeTokenResponse = {
+  ok?: boolean;
+  value?: string;
+  error?: string;
+};
+
 const appendVoiceText = (baseText: string, voiceText: string) => {
   const cleanVoiceText = voiceText.trim();
   if (!cleanVoiceText) return baseText;
@@ -129,6 +135,19 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
     }
   };
 
+  const createRealtimeToken = async () => {
+    const response = await fetch('/api/realtime/transcription-token', {
+      method: 'POST',
+    });
+    const payload = await response.json().catch(() => null) as RealtimeTokenResponse | null;
+
+    if (!response.ok || !payload?.value) {
+      throw new Error(payload?.error || `Realtime token request failed (${response.status}).`);
+    }
+
+    return payload.value;
+  };
+
   const startListening = async () => {
     if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
       setVoiceError('Realtime voice input needs browser microphone and WebRTC support.');
@@ -175,20 +194,22 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
       dataChannelRef.current = dataChannel;
       mediaStreamRef.current = mediaStream;
 
+      const ephemeralKey = await createRealtimeToken();
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
 
-      const sdpResponse = await fetch('/api/realtime/transcription-session', {
+      const sdpResponse = await fetch('https://api.openai.com/v1/realtime/calls', {
         method: 'POST',
         body: offer.sdp,
         headers: {
+          Authorization: `Bearer ${ephemeralKey}`,
           'Content-Type': 'application/sdp',
         },
       });
 
       const answerSdp = await sdpResponse.text();
       if (!sdpResponse.ok) {
-        throw new Error(answerSdp || 'Realtime transcription session failed.');
+        throw new Error(answerSdp || `Realtime WebRTC connection failed (${sdpResponse.status}).`);
       }
 
       await peerConnection.setRemoteDescription({
