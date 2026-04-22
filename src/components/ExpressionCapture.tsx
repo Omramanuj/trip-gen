@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, Check, Loader2, Zap } from 'lucide-react';
 import { MOCK_INPUT } from '../mockData';
@@ -35,11 +35,75 @@ const NUDGES = [
   { id: 'search_strategy', label: 'Thoughts on search strategy', mandatory: false }
 ] satisfies { id: CoverageFieldId; label: string; mandatory: boolean }[];
 
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  [index: number]: { transcript: string };
+};
+
+type SpeechRecognitionEventLike = Event & {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: SpeechRecognitionResultLike;
+  };
+};
+
+type SpeechRecognitionErrorEventLike = Event & {
+  error?: string;
+};
+
+type SpeechRecognitionLike = EventTarget & {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onend: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
+}
+
+const getSpeechRecognition = () => window.SpeechRecognition || window.webkitSpeechRecognition;
+
+const appendVoiceText = (baseText: string, voiceText: string) => {
+  const cleanVoiceText = voiceText.trim();
+  if (!cleanVoiceText) return baseText;
+  if (!baseText.trim()) return cleanVoiceText;
+
+  const separator = /[\s\n]$/.test(baseText) ? '' : ' ';
+  return `${baseText}${separator}${cleanVoiceText}`;
+};
+
 export function ExpressionCapture({ inputText, setInputText, onCrystallize }: ExpressionCaptureProps) {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
-  const [isListening, setIsListening] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceError, setVoiceError] = useState('');
+  const [supportsVoiceInput, setSupportsVoiceInput] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const shouldListenRef = useRef(false);
+  const baseInputRef = useRef('');
+  const committedTranscriptRef = useRef('');
   const coverage = useMemo(() => fastExtractBriefCoverage(inputText), [inputText]);
+
+  useEffect(() => {
+    setSupportsVoiceInput(Boolean(getSpeechRecognition()));
+
+    return () => {
+      shouldListenRef.current = false;
+      recognitionRef.current?.stop();
+    };
+  }, []);
 
   const toggleTag = (id: string) => {
     const next = new Set(selectedTags);
@@ -50,6 +114,105 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
 
   const handleMockFill = () => {
     setInputText(MOCK_INPUT);
+  };
+
+  const stopListening = () => {
+    shouldListenRef.current = false;
+    setIsListening(false);
+    recognitionRef.current?.stop();
+  };
+
+  const startListening = () => {
+    const SpeechRecognition = getSpeechRecognition();
+
+    if (!SpeechRecognition) {
+      setVoiceError('Live voice input is not supported in this browser. Try Chrome or Edge.');
+      setSupportsVoiceInput(false);
+      return;
+    }
+
+    setVoiceError('');
+    shouldListenRef.current = true;
+    baseInputRef.current = inputText;
+    committedTranscriptRef.current = '';
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-IN';
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const transcript = result[0]?.transcript || '';
+
+        if (result.isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (finalTranscript.trim()) {
+        committedTranscriptRef.current = appendVoiceText(
+          committedTranscriptRef.current,
+          finalTranscript
+        );
+      }
+
+      const liveTranscript = appendVoiceText(
+        committedTranscriptRef.current,
+        interimTranscript
+      );
+
+      setInputText(appendVoiceText(baseInputRef.current, liveTranscript));
+    };
+
+    recognition.onerror = (event) => {
+      const error = event.error || 'speech-recognition-error';
+      if (error === 'not-allowed' || error === 'service-not-allowed') {
+        setVoiceError('Microphone access was blocked. Allow microphone permission and try again.');
+        stopListening();
+        return;
+      }
+
+      setVoiceError(`Voice input stopped: ${error}.`);
+    };
+
+    recognition.onend = () => {
+      if (!shouldListenRef.current) return;
+
+      try {
+        recognition.start();
+      } catch {
+        setIsListening(false);
+        shouldListenRef.current = false;
+      }
+    };
+
+    recognitionRef.current = recognition;
+    setIsListening(true);
+
+    try {
+      recognition.start();
+    } catch {
+      setIsListening(false);
+      shouldListenRef.current = false;
+      setVoiceError('Voice input could not start. Try again after a moment.');
+    }
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+      return;
+    }
+
+    startListening();
   };
 
   useEffect(() => {
@@ -82,24 +245,39 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-4">
              <button 
-                onClick={() => setIsListening(!isListening)}
+                onClick={toggleListening}
+                disabled={!supportsVoiceInput}
+                title={supportsVoiceInput ? 'Toggle live voice input' : 'Live voice input is not supported in this browser'}
                 className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
                   isListening 
                     ? 'bg-signal-weak/10 text-signal-weak animate-pulse' 
-                    : 'bg-surface-card border border-ink/10 text-ink/60 hover:text-ink hover:border-ink/30'
+                    : supportsVoiceInput
+                      ? 'bg-surface-card border border-ink/10 text-ink/60 hover:text-ink hover:border-ink/30'
+                      : 'bg-surface-card border border-ink/10 text-ink-faint cursor-not-allowed'
                 }`}
               >
                 {isListening ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
               </button>
               <div className="flex flex-col">
-                 <span className="font-medium text-sm text-ink">{isListening ? 'Listening...' : 'Tap to speak'}</span>
+                 <span className="font-medium text-sm text-ink">
+                   {isListening ? 'Listening live...' : supportsVoiceInput ? 'Tap to speak' : 'Voice unavailable'}
+                 </span>
+                 <span className="text-xs text-ink-muted">
+                   {isListening ? 'Transcript streams into the brief as you talk.' : 'Uses browser speech recognition.'}
+                 </span>
               </div>
           </div>
 
           <div className="relative w-full">
             <textarea
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                if (isListening) {
+                  baseInputRef.current = e.target.value;
+                  committedTranscriptRef.current = '';
+                }
+              }}
               placeholder="Type or paste what's on your mind"
               className={`w-full min-h-[160px] bg-white border border-ink/10 p-6 font-serif text-base leading-relaxed text-black caret-black resize-y outline-none focus:border-ink/30 transition-colors placeholder:text-ink-faint ${isListening && inputText.length === 0 ? 'italic' : ''}`}
             />
@@ -112,6 +290,11 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
               </button>
             </div>
           </div>
+          {voiceError && (
+            <div className="rounded-sm border border-signal-warning/30 bg-signal-warning/10 px-3 py-2 text-xs text-signal-warning">
+              {voiceError}
+            </div>
+          )}
         </div>
 
         <div className="mt-2">
