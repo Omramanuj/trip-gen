@@ -31,6 +31,9 @@ OPENROUTER_FAST_MODEL="openai/gpt-4o-mini"
 OPENROUTER_STRATEGY_MODEL="openai/gpt-4o"
 OPENROUTER_TRIP_MODEL="openai/gpt-4o"
 OPENROUTER_TIMEOUT_MS="90000"
+OPENAI_API_KEY="your_openai_key"
+OPENAI_TRANSCRIBE_MODEL="gpt-4o-mini-transcribe"
+OPENAI_TRANSCRIBE_LANGUAGE="en"
 ```
 
 Start the combined frontend + API server:
@@ -46,6 +49,8 @@ http://localhost:3000/
 ```
 
 Go to **Prompt Lab**, pick a prompt case, edit the JSON input, and click **Run LLM**. The frontend sends the actual rendered system/user messages to `/api/prompt-lab/run`; the API calls OpenRouter server-side so the key is not exposed in the browser.
+
+The **Describe the role** mic button uses OpenAI Realtime transcription over WebRTC. The browser streams microphone audio through `/api/realtime/transcription-session`, which signs the session server-side with `OPENAI_API_KEY`; the key is never exposed to the browser.
 
 ## Prompt Evals
 

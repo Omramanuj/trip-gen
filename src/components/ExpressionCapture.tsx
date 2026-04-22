@@ -35,47 +35,15 @@ const NUDGES = [
   { id: 'search_strategy', label: 'Thoughts on search strategy', mandatory: false }
 ] satisfies { id: CoverageFieldId; label: string; mandatory: boolean }[];
 
-type SpeechRecognitionResultLike = {
-  isFinal: boolean;
-  [index: number]: { transcript: string };
-};
-
-type SpeechRecognitionEventLike = Event & {
-  resultIndex: number;
-  results: {
-    length: number;
-    [index: number]: SpeechRecognitionResultLike;
+type RealtimeTranscriptionEvent = {
+  type: string;
+  item_id?: string;
+  delta?: string;
+  transcript?: string;
+  error?: {
+    message?: string;
   };
 };
-
-type SpeechRecognitionErrorEventLike = Event & {
-  error?: string;
-};
-
-type SpeechRecognitionLike = EventTarget & {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  maxAlternatives: number;
-  onend: (() => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  start: () => void;
-  stop: () => void;
-};
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
-type VoiceRestartReason = 'network' | 'ended';
-
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  }
-}
-
-const getSpeechRecognition = () => window.SpeechRecognition || window.webkitSpeechRecognition;
-const VOICE_RESTART_DELAY_MS = 300;
 
 const appendVoiceText = (baseText: string, voiceText: string) => {
   const cleanVoiceText = voiceText.trim();
@@ -92,22 +60,21 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
   const [voiceError, setVoiceError] = useState('');
   const [supportsVoiceInput, setSupportsVoiceInput] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const shouldListenRef = useRef(false);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const baseInputRef = useRef('');
-  const committedTranscriptRef = useRef('');
-  const restartTimerRef = useRef<number | null>(null);
+  const completedTranscriptsRef = useRef<string[]>([]);
+  const activeTranscriptsRef = useRef<Record<string, string>>({});
   const coverage = useMemo(() => fastExtractBriefCoverage(inputText), [inputText]);
 
   useEffect(() => {
-    setSupportsVoiceInput(Boolean(getSpeechRecognition()));
+    setSupportsVoiceInput(Boolean(navigator.mediaDevices?.getUserMedia && window.RTCPeerConnection));
 
     return () => {
-      shouldListenRef.current = false;
-      if (restartTimerRef.current !== null) {
-        window.clearTimeout(restartTimerRef.current);
-      }
-      recognitionRef.current?.stop();
+      dataChannelRef.current?.close();
+      peerConnectionRef.current?.close();
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -122,117 +89,119 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
     setInputText(MOCK_INPUT);
   };
 
-  const scheduleVoiceRestart = (recognition: SpeechRecognitionLike, reason: VoiceRestartReason) => {
-    if (!shouldListenRef.current) return;
-    if (restartTimerRef.current !== null) return;
-
-    restartTimerRef.current = window.setTimeout(() => {
-      restartTimerRef.current = null;
-      if (!shouldListenRef.current) return;
-
-      try {
-        recognition.start();
-        if (reason === 'network') {
-          setVoiceError('Voice input reconnected after a network interruption.');
-        }
-      } catch {
-        setIsListening(false);
-        shouldListenRef.current = false;
-        setVoiceError('Voice input could not restart. Tap the mic to try again.');
-      }
-    }, VOICE_RESTART_DELAY_MS);
+  const renderRealtimeTranscript = () => {
+    const completed = completedTranscriptsRef.current.join(' ');
+    const active = Object.values(activeTranscriptsRef.current).join(' ');
+    const liveTranscript = appendVoiceText(completed, active);
+    setInputText(appendVoiceText(baseInputRef.current, liveTranscript));
   };
 
   const stopListening = () => {
-    shouldListenRef.current = false;
-    if (restartTimerRef.current !== null) {
-      window.clearTimeout(restartTimerRef.current);
-      restartTimerRef.current = null;
-    }
+    dataChannelRef.current?.close();
+    peerConnectionRef.current?.close();
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    dataChannelRef.current = null;
+    peerConnectionRef.current = null;
+    mediaStreamRef.current = null;
     setIsListening(false);
-    recognitionRef.current?.stop();
   };
 
-  const startListening = () => {
-    const SpeechRecognition = getSpeechRecognition();
+  const handleRealtimeEvent = (event: RealtimeTranscriptionEvent) => {
+    if (event.type === 'conversation.item.input_audio_transcription.delta') {
+      const itemId = event.item_id || 'active';
+      activeTranscriptsRef.current[itemId] = `${activeTranscriptsRef.current[itemId] || ''}${event.delta || ''}`;
+      renderRealtimeTranscript();
+      return;
+    }
 
-    if (!SpeechRecognition) {
-      setVoiceError('Live voice input is not supported in this browser. Try Chrome or Edge.');
+    if (event.type === 'conversation.item.input_audio_transcription.completed') {
+      const itemId = event.item_id || 'active';
+      delete activeTranscriptsRef.current[itemId];
+      if (event.transcript?.trim()) {
+        completedTranscriptsRef.current = [...completedTranscriptsRef.current, event.transcript.trim()];
+      }
+      renderRealtimeTranscript();
+      return;
+    }
+
+    if (event.type === 'error') {
+      setVoiceError(event.error?.message || 'Realtime transcription failed.');
+    }
+  };
+
+  const startListening = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
+      setVoiceError('Realtime voice input needs browser microphone and WebRTC support.');
       setSupportsVoiceInput(false);
       return;
     }
 
     setVoiceError('');
-    shouldListenRef.current = true;
     baseInputRef.current = inputText;
-    committedTranscriptRef.current = '';
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-IN';
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
-
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        const transcript = result[0]?.transcript || '';
-
-        if (result.isFinal) {
-          finalTranscript += transcript;
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-
-      if (finalTranscript.trim()) {
-        committedTranscriptRef.current = appendVoiceText(
-          committedTranscriptRef.current,
-          finalTranscript
-        );
-      }
-
-      const liveTranscript = appendVoiceText(
-        committedTranscriptRef.current,
-        interimTranscript
-      );
-
-      setInputText(appendVoiceText(baseInputRef.current, liveTranscript));
-    };
-
-    recognition.onerror = (event) => {
-      const error = event.error || 'speech-recognition-error';
-      if (error === 'not-allowed' || error === 'service-not-allowed') {
-        setVoiceError('Microphone access was blocked. Allow microphone permission and try again.');
-        stopListening();
-        return;
-      }
-
-      if (error === 'network') {
-        setVoiceError('Voice input had a network interruption. Reconnecting...');
-        scheduleVoiceRestart(recognition, 'network');
-        return;
-      }
-
-      setVoiceError(`Voice input stopped: ${error}.`);
-    };
-
-    recognition.onend = () => {
-      scheduleVoiceRestart(recognition, 'ended');
-    };
-
-    recognitionRef.current = recognition;
+    completedTranscriptsRef.current = [];
+    activeTranscriptsRef.current = {};
     setIsListening(true);
 
     try {
-      recognition.start();
-    } catch {
-      setIsListening(false);
-      shouldListenRef.current = false;
-      setVoiceError('Voice input could not start. Try again after a moment.');
+      const peerConnection = new RTCPeerConnection();
+      const dataChannel = peerConnection.createDataChannel('oai-events');
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      mediaStream.getAudioTracks().forEach((track) => {
+        peerConnection.addTrack(track, mediaStream);
+      });
+
+      dataChannel.addEventListener('open', () => {
+        setVoiceError('');
+      });
+
+      dataChannel.addEventListener('message', (message) => {
+        try {
+          handleRealtimeEvent(JSON.parse(message.data) as RealtimeTranscriptionEvent);
+        } catch {
+          // Ignore non-JSON control messages.
+        }
+      });
+
+      peerConnection.addEventListener('connectionstatechange', () => {
+        if (['failed', 'disconnected', 'closed'].includes(peerConnection.connectionState)) {
+          if (peerConnectionRef.current === peerConnection) {
+            setIsListening(false);
+          }
+        }
+      });
+
+      peerConnectionRef.current = peerConnection;
+      dataChannelRef.current = dataChannel;
+      mediaStreamRef.current = mediaStream;
+
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+
+      const sdpResponse = await fetch('/api/realtime/transcription-session', {
+        method: 'POST',
+        body: offer.sdp,
+        headers: {
+          'Content-Type': 'application/sdp',
+        },
+      });
+
+      const answerSdp = await sdpResponse.text();
+      if (!sdpResponse.ok) {
+        throw new Error(answerSdp || 'Realtime transcription session failed.');
+      }
+
+      await peerConnection.setRemoteDescription({
+        type: 'answer',
+        sdp: answerSdp,
+      });
+    } catch (error) {
+      stopListening();
+      if (error instanceof DOMException && error.name === 'NotAllowedError') {
+        setVoiceError('Microphone access was blocked. Allow microphone permission and try again.');
+        return;
+      }
+      setVoiceError(error instanceof Error ? error.message : 'Realtime voice input could not start.');
     }
   };
 
@@ -277,7 +246,7 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
              <button 
                 onClick={toggleListening}
                 disabled={!supportsVoiceInput}
-                title={supportsVoiceInput ? 'Toggle live voice input' : 'Live voice input is not supported in this browser'}
+                title={supportsVoiceInput ? 'Toggle OpenAI Realtime voice input' : 'Realtime voice input is not supported in this browser'}
                 className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
                   isListening 
                     ? 'bg-signal-weak/10 text-signal-weak animate-pulse' 
@@ -293,7 +262,7 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
                    {isListening ? 'Listening live...' : supportsVoiceInput ? 'Tap to speak' : 'Voice unavailable'}
                  </span>
                  <span className="text-xs text-ink-muted">
-                   {isListening ? 'Transcript streams into the brief as you talk.' : 'Uses browser speech recognition.'}
+                   {isListening ? 'Streaming to OpenAI Realtime.' : 'Uses WebRTC transcription.'}
                  </span>
               </div>
           </div>
@@ -305,7 +274,8 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
                 setInputText(e.target.value);
                 if (isListening) {
                   baseInputRef.current = e.target.value;
-                  committedTranscriptRef.current = '';
+                  completedTranscriptsRef.current = [];
+                  activeTranscriptsRef.current = {};
                 }
               }}
               placeholder="Type or paste what's on your mind"

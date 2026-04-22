@@ -158,6 +158,7 @@ async function callOpenRouter(body) {
 
 async function main() {
   const app = express();
+  app.use('/api/realtime/transcription-session', express.text({ type: ['application/sdp', 'text/plain'] }));
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/api/prompt-lab/health', (_req, res) => {
@@ -185,6 +186,61 @@ async function main() {
           ? `OpenRouter request timed out after ${requestTimeoutMs / 1000}s. Try a faster model or reduce max output tokens.`
           : error instanceof Error ? error.message : 'Unknown prompt lab error',
       });
+    }
+  });
+
+  app.post('/api/realtime/transcription-session', async (req, res) => {
+    try {
+      if (!process.env.OPENAI_API_KEY) {
+        res.status(500).send('OPENAI_API_KEY is not set. Add it to design/recruitment-os/.env.');
+        return;
+      }
+
+      if (typeof req.body !== 'string' || !req.body.trim()) {
+        res.status(400).send('Expected SDP offer in request body.');
+        return;
+      }
+
+      const sessionConfig = {
+        type: 'transcription',
+        audio: {
+          input: {
+            transcription: {
+              model: process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe',
+              language: process.env.OPENAI_TRANSCRIBE_LANGUAGE || 'en',
+              prompt: process.env.OPENAI_TRANSCRIBE_PROMPT || 'Recruitment role brief with job title, experience, location, work mode, salary, skills, constraints, and search strategy.',
+            },
+            turn_detection: {
+              type: 'server_vad',
+              threshold: Number(process.env.OPENAI_TRANSCRIBE_VAD_THRESHOLD || 0.5),
+              prefix_padding_ms: 300,
+              silence_duration_ms: 500,
+            },
+          },
+        },
+      };
+
+      const formData = new FormData();
+      formData.set('sdp', req.body);
+      formData.set('session', JSON.stringify(sessionConfig));
+
+      const response = await fetch('https://api.openai.com/v1/realtime/calls', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+        body: formData,
+      });
+
+      const answer = await response.text();
+      if (!response.ok) {
+        res.status(response.status).send(answer || response.statusText);
+        return;
+      }
+
+      res.type('application/sdp').send(answer);
+    } catch (error) {
+      res.status(500).send(error instanceof Error ? error.message : 'Unknown realtime transcription error');
     }
   });
 
