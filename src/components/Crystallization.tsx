@@ -10,6 +10,7 @@ import {
 } from '../prompts/recruitmentOsPrompts';
 import { BriefExtraction, InferenceCards, mandatoryBriefFields } from '../prompts/recruitmentOsSchemas';
 import { readPromptLabResponse } from '../lib/promptLabClient';
+import { useRealtimeTranscription } from '../lib/useRealtimeTranscription';
 
 interface CrystallizationProps {
   inputText: string;
@@ -168,8 +169,14 @@ function tensionsFromInference(inference: InferenceCards): TensionCardData[] {
 export function Crystallization({ inputText, cards, setCards, tensions, setTensions, onNext }: CrystallizationProps) {
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
-  const [isListening, setIsListening] = useState(false);
   const [answerText, setAnswerText] = useState('');
+  const {
+    isListening,
+    supportsVoiceInput,
+    voiceError,
+    toggleListening,
+    handleTextChange: handleAnswerTextChange,
+  } = useRealtimeTranscription({ text: answerText, setText: setAnswerText });
   const [showInferred, setShowInferred] = useState(false);
   const [status, setStatus] = useState<PipelineStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -454,25 +461,39 @@ export function Crystallization({ inputText, cards, setCards, tensions, setTensi
           <div className="flex flex-col gap-4 mt-2">
             <div className="flex items-center gap-4">
               <button 
-                  onClick={() => setIsListening(!isListening)}
+                  onClick={toggleListening}
+                  disabled={!supportsVoiceInput}
+                  title={supportsVoiceInput ? 'Toggle OpenAI Realtime voice input' : 'Realtime voice input is not supported in this browser'}
                   className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
                     isListening 
                       ? 'bg-signal-weak/10 text-signal-weak animate-pulse' 
-                      : 'bg-base border border-ink/10 text-ink/60 hover:text-ink hover:border-ink/30'
+                      : supportsVoiceInput
+                        ? 'bg-base border border-ink/10 text-ink/60 hover:text-ink hover:border-ink/30'
+                        : 'bg-base border border-ink/10 text-ink-faint cursor-not-allowed'
                   }`}
                 >
                   {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
               </button>
               <div className="flex flex-col">
-                  <span className="font-medium text-sm text-ink">{isListening ? 'Listening...' : 'Tap to speak'}</span>
+                  <span className="font-medium text-sm text-ink">
+                    {isListening ? 'Listening live...' : supportsVoiceInput ? 'Tap to speak' : 'Voice unavailable'}
+                  </span>
+                  <span className="text-xs text-ink-muted">
+                    {isListening ? 'Streaming to OpenAI Realtime.' : 'Uses WebRTC transcription.'}
+                  </span>
               </div>
             </div>
             <textarea
               value={answerText}
-              onChange={(e) => setAnswerText(e.target.value)}
+              onChange={(e) => handleAnswerTextChange(e.target.value)}
               placeholder="Example: Avoid candidates from pure services teams. Red flags: no ownership of production incidents, only feature delivery, no payment or ledger exposure."
               className="w-full min-h-[120px] bg-white border border-ink/10 p-4 font-serif text-sm leading-relaxed text-black caret-black resize-y outline-none focus:border-ink/30 transition-colors placeholder:text-ink-faint"
             />
+            {voiceError && (
+              <div className="rounded-sm border border-signal-warning/30 bg-signal-warning/10 px-3 py-2 text-xs text-signal-warning">
+                {voiceError}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end mt-4 pt-4 border-t border-ink/10">

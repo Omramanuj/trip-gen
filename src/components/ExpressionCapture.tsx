@@ -1,8 +1,9 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, Check, Loader2, Zap } from 'lucide-react';
 import { MOCK_INPUT } from '../mockData';
 import { CoverageFieldId, fastExtractBriefCoverage } from '../lib/fastBriefCoverage';
+import { useRealtimeTranscription } from '../lib/useRealtimeTranscription';
 
 interface ExpressionCaptureProps {
   inputText: string;
@@ -35,53 +36,17 @@ const NUDGES = [
   { id: 'search_strategy', label: 'Thoughts on search strategy', mandatory: false }
 ] satisfies { id: CoverageFieldId; label: string; mandatory: boolean }[];
 
-type RealtimeTranscriptionEvent = {
-  type: string;
-  item_id?: string;
-  delta?: string;
-  transcript?: string;
-  error?: {
-    message?: string;
-  };
-};
-
-type RealtimeTokenResponse = {
-  ok?: boolean;
-  value?: string;
-  error?: string;
-};
-
-const appendVoiceText = (baseText: string, voiceText: string) => {
-  const cleanVoiceText = voiceText.trim();
-  if (!cleanVoiceText) return baseText;
-  if (!baseText.trim()) return cleanVoiceText;
-
-  const separator = /[\s\n]$/.test(baseText) ? '' : ' ';
-  return `${baseText}${separator}${cleanVoiceText}`;
-};
-
 export function ExpressionCapture({ inputText, setInputText, onCrystallize }: ExpressionCaptureProps) {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
-  const [isListening, setIsListening] = useState(false);
-  const [voiceError, setVoiceError] = useState('');
-  const [supportsVoiceInput, setSupportsVoiceInput] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const baseInputRef = useRef('');
-  const activeTranscriptsRef = useRef<Record<string, string>>({});
+  const {
+    isListening,
+    supportsVoiceInput,
+    voiceError,
+    toggleListening,
+    handleTextChange,
+  } = useRealtimeTranscription({ text: inputText, setText: setInputText });
   const coverage = useMemo(() => fastExtractBriefCoverage(inputText), [inputText]);
-
-  useEffect(() => {
-    setSupportsVoiceInput(Boolean(navigator.mediaDevices?.getUserMedia && window.RTCPeerConnection));
-
-    return () => {
-      dataChannelRef.current?.close();
-      peerConnectionRef.current?.close();
-      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-    };
-  }, []);
 
   const toggleTag = (id: string) => {
     const next = new Set(selectedTags);
@@ -94,143 +59,6 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
     setInputText(MOCK_INPUT);
   };
 
-  const renderRealtimeTranscript = () => {
-    const active = Object.values(activeTranscriptsRef.current).join(' ');
-    setInputText(appendVoiceText(baseInputRef.current, active));
-  };
-
-  const stopListening = () => {
-    dataChannelRef.current?.close();
-    peerConnectionRef.current?.close();
-    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-    dataChannelRef.current = null;
-    peerConnectionRef.current = null;
-    mediaStreamRef.current = null;
-    setIsListening(false);
-  };
-
-  const handleRealtimeEvent = (event: RealtimeTranscriptionEvent) => {
-    if (event.type === 'conversation.item.input_audio_transcription.delta') {
-      const itemId = event.item_id || 'active';
-      activeTranscriptsRef.current[itemId] = `${activeTranscriptsRef.current[itemId] || ''}${event.delta || ''}`;
-      renderRealtimeTranscript();
-      return;
-    }
-
-    if (event.type === 'conversation.item.input_audio_transcription.completed') {
-      const itemId = event.item_id || 'active';
-      const finalTranscript = event.transcript?.trim() || activeTranscriptsRef.current[itemId]?.trim() || '';
-      delete activeTranscriptsRef.current[itemId];
-      if (finalTranscript) {
-        baseInputRef.current = appendVoiceText(baseInputRef.current, finalTranscript);
-      }
-      renderRealtimeTranscript();
-      return;
-    }
-
-    if (event.type === 'error') {
-      setVoiceError(event.error?.message || 'Realtime transcription failed.');
-    }
-  };
-
-  const createRealtimeToken = async () => {
-    const response = await fetch('/api/realtime/transcription-token', {
-      method: 'POST',
-    });
-    const payload = await response.json().catch(() => null) as RealtimeTokenResponse | null;
-
-    if (!response.ok || !payload?.value) {
-      throw new Error(payload?.error || `Realtime token request failed (${response.status}).`);
-    }
-
-    return payload.value;
-  };
-
-  const startListening = async () => {
-    if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
-      setVoiceError('Realtime voice input needs browser microphone and WebRTC support.');
-      setSupportsVoiceInput(false);
-      return;
-    }
-
-    setVoiceError('');
-    baseInputRef.current = inputText;
-    activeTranscriptsRef.current = {};
-    setIsListening(true);
-
-    try {
-      const peerConnection = new RTCPeerConnection();
-      const dataChannel = peerConnection.createDataChannel('oai-events');
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      mediaStream.getAudioTracks().forEach((track) => {
-        peerConnection.addTrack(track, mediaStream);
-      });
-
-      dataChannel.addEventListener('open', () => {
-        setVoiceError('');
-      });
-
-      dataChannel.addEventListener('message', (message) => {
-        try {
-          handleRealtimeEvent(JSON.parse(message.data) as RealtimeTranscriptionEvent);
-        } catch {
-          // Ignore non-JSON control messages.
-        }
-      });
-
-      peerConnection.addEventListener('connectionstatechange', () => {
-        if (['failed', 'disconnected', 'closed'].includes(peerConnection.connectionState)) {
-          if (peerConnectionRef.current === peerConnection) {
-            setIsListening(false);
-          }
-        }
-      });
-
-      peerConnectionRef.current = peerConnection;
-      dataChannelRef.current = dataChannel;
-      mediaStreamRef.current = mediaStream;
-
-      const ephemeralKey = await createRealtimeToken();
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-
-      const sdpResponse = await fetch('https://api.openai.com/v1/realtime/calls', {
-        method: 'POST',
-        body: offer.sdp,
-        headers: {
-          Authorization: `Bearer ${ephemeralKey}`,
-          'Content-Type': 'application/sdp',
-        },
-      });
-
-      const answerSdp = await sdpResponse.text();
-      if (!sdpResponse.ok) {
-        throw new Error(answerSdp || `Realtime WebRTC connection failed (${sdpResponse.status}).`);
-      }
-
-      await peerConnection.setRemoteDescription({
-        type: 'answer',
-        sdp: answerSdp,
-      });
-    } catch (error) {
-      stopListening();
-      if (error instanceof DOMException && error.name === 'NotAllowedError') {
-        setVoiceError('Microphone access was blocked. Allow microphone permission and try again.');
-        return;
-      }
-      setVoiceError(error instanceof Error ? error.message : 'Realtime voice input could not start.');
-    }
-  };
-
-  const toggleListening = () => {
-    if (isListening) {
-      stopListening();
-      return;
-    }
-
-    startListening();
-  };
 
   useEffect(() => {
     if (inputText.trim().length < 12) {
@@ -288,13 +116,7 @@ export function ExpressionCapture({ inputText, setInputText, onCrystallize }: Ex
           <div className="relative w-full">
             <textarea
               value={inputText}
-              onChange={(e) => {
-                setInputText(e.target.value);
-                if (isListening) {
-                  baseInputRef.current = e.target.value;
-                  activeTranscriptsRef.current = {};
-                }
-              }}
+              onChange={(e) => handleTextChange(e.target.value)}
               placeholder="Type or paste what's on your mind"
               className={`w-full min-h-[160px] bg-white border border-ink/10 p-6 font-serif text-base leading-relaxed text-black caret-black resize-y outline-none focus:border-ink/30 transition-colors placeholder:text-ink-faint ${isListening && inputText.length === 0 ? 'italic' : ''}`}
             />
