@@ -23,6 +23,14 @@ export interface TensionCardData {
   status: 'pending' | 'resolved' | 'dismissed';
 }
 
+export interface RoleSystemStore {
+  approvedBrief: import('./prompts/recruitmentOsSchemas').BriefExtraction | null;
+  approvedInferenceCards: import('./prompts/recruitmentOsSchemas').InferenceCards | null;
+  cardStatuses: Record<string, CrystallizationCardData['status']>;
+  cardEdits: Record<string, string>;
+  updatedAt: string | null;
+}
+
 export interface ApplicationFormFieldData {
   field_id: string;
   label: string;

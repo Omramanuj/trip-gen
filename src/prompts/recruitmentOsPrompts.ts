@@ -352,6 +352,9 @@ ${supportedLeverTaxonomy}
 Rules:
 - Suggest only journey_number >= 2.
 - Use only supported lever_id values: ${leverIds.join(", ")}.
+- Treat the approved inference cards as the HM-approved role system. If they conflict with the original brief, the approved inference cards win.
+- Treat skill_table.core and skill_table.micro as explicit target skills. Do not ignore a core skill just because it is not strongly represented in the original brief.
+- Cover every skill_table.core item across the journey plan unless two items are clearly duplicates. At minimum, each core skill must appear in target_signals or the journey skill_frame.
 - Choose the lowest-friction lever that can validate the signal.
 - Include rationale so the HM can override.
 - Do not generate full card content here; only plan the sequence.
@@ -431,6 +434,9 @@ Universal rules:
 - Use sequence_index starting at 1 for sub_card_templates.
 - Every response_expected=true sub-card must be answerable by the current runtime interaction_type.
 - Keep mobile-safe copy short.
+- Treat the approved inference cards as the HM-approved role system. If they conflict with the original brief, approved inference cards win.
+- The confirmed journey.skill_frame is the main target for this card, but it must remain aligned with approved inference_cards.skill_table core and micro skills.
+- If a skill appears in approved inference_cards.skill_table but not in the original brief, treat it as an intentional HM edit, not noise.
 - Use the confirmed journey.skill_frame when present. If absent, infer the smallest usable frame from approved inference cards.
 - Scenario framing must be realistic and role-aligned, with no trick wording.
 - Declare explicit non-signals in body_json where useful, such as not judging accent, polish, or visual design.

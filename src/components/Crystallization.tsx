@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CrystallizationCardData, TensionCardData } from '../types';
+import { CrystallizationCardData, RoleSystemStore, TensionCardData } from '../types';
 import { AlertCircle, Check, Edit2, Loader2, Mic, MicOff, RefreshCw, X } from 'lucide-react';
 import {
   buildBriefExtractionPrompt,
@@ -18,6 +18,8 @@ interface CrystallizationProps {
   setCards: React.Dispatch<React.SetStateAction<CrystallizationCardData[]>>;
   tensions: TensionCardData[];
   setTensions: React.Dispatch<React.SetStateAction<TensionCardData[]>>;
+  roleSystemStore: RoleSystemStore;
+  setRoleSystemStore: React.Dispatch<React.SetStateAction<RoleSystemStore>>;
   onNext: () => void;
 }
 
@@ -98,6 +100,34 @@ function getMissingFields(brief: Partial<BriefExtraction>) {
   });
 }
 
+function hasText(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasItems(value: unknown) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function getClarificationFields(brief: Partial<BriefExtraction>) {
+  const missingFields = getMissingFields(brief);
+
+  return missingFields.filter((field) => {
+    if (field === 'company_type') {
+      return !hasText(brief.industry_type) && !hasText(brief.search_strategy);
+    }
+
+    if (field === 'experience_type') {
+      return !hasItems(brief.must_haves) && !hasItems(brief.red_flags);
+    }
+
+    if (field === 'disqualifiers') {
+      return !hasItems(brief.red_flags);
+    }
+
+    return true;
+  });
+}
+
 function confidenceOf(value: { confidence?: string } | undefined): CrystallizationCardData['confidence'] {
   if (value?.confidence === 'verified' || value?.confidence === 'weak') return value.confidence;
   return 'inferred';
@@ -166,7 +196,123 @@ function tensionsFromInference(inference: InferenceCards): TensionCardData[] {
   }));
 }
 
-export function Crystallization({ inputText, cards, setCards, tensions, setTensions, onNext }: CrystallizationProps) {
+function splitList(value: string) {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function extractSection(content: string, label: string, nextLabels: string[] = []) {
+  const start = content.toLowerCase().indexOf(label.toLowerCase());
+  if (start < 0) return null;
+
+  const afterLabel = content.slice(start + label.length);
+  const nextIndex = nextLabels
+    .map((nextLabel) => afterLabel.toLowerCase().indexOf(nextLabel.toLowerCase()))
+    .filter((index) => index >= 0)
+    .sort((a, b) => a - b)[0];
+
+  return (nextIndex === undefined ? afterLabel : afterLabel.slice(0, nextIndex)).trim();
+}
+
+function parseFrame(frame: string | null, current: InferenceCards['skill_table']) {
+  if (!frame) return current;
+
+  const [domain, primarySkill, bandRung] = frame.split('|').map((part) => part.trim());
+  const bandMatch = bandRung?.match(/Band\s+([1-4])/i);
+  const rungMatch = bandRung?.match(/Rung\s+([A-E])/i);
+
+  return {
+    ...current,
+    domain: domain || current.domain,
+    primary_skill: primarySkill || current.primary_skill,
+    target_band: (bandMatch?.[1] as InferenceCards['skill_table']['target_band']) || current.target_band,
+    target_rung: (rungMatch?.[1] as InferenceCards['skill_table']['target_rung']) || current.target_rung,
+  };
+}
+
+function applyCardEditToInference(inference: InferenceCards | null, cardId: string, content: string): InferenceCards | null {
+  if (!inference) return inference;
+
+  if (cardId === 'ideal_candidate') {
+    return { ...inference, ideal_candidate: { ...inference.ideal_candidate, content } };
+  }
+
+  if (cardId === 'location_comp') {
+    return { ...inference, location_comp: { ...inference.location_comp, content } };
+  }
+
+  if (cardId === 'teachable_vs_innate') {
+    const alreadyExist = extractSection(content, 'ALREADY EXIST:', ['CAN BE TAUGHT:']);
+    const canBeTaught = extractSection(content, 'CAN BE TAUGHT:');
+    return {
+      ...inference,
+      teachable_vs_innate: {
+        ...inference.teachable_vs_innate,
+        already_exist: alreadyExist ? splitList(alreadyExist) : inference.teachable_vs_innate.already_exist,
+        can_be_taught: canBeTaught ? splitList(canBeTaught) : inference.teachable_vs_innate.can_be_taught,
+      },
+    };
+  }
+
+  if (cardId === 'must_haves_red_flags') {
+    const mustHaves = extractSection(content, 'MUST HAVES:', ['RED FLAGS:']);
+    const redFlags = extractSection(content, 'RED FLAGS:');
+    return {
+      ...inference,
+      must_haves_red_flags: {
+        ...inference.must_haves_red_flags,
+        must_haves: mustHaves ? splitList(mustHaves) : inference.must_haves_red_flags.must_haves,
+        red_flags: redFlags && redFlags !== 'None specified' ? splitList(redFlags) : [],
+      },
+    };
+  }
+
+  if (cardId === 'search_playbook') {
+    const [contentLine] = content.split('\n');
+    const targetPools = extractSection(content, 'Target pools:', ['Avoid:']);
+    const avoidPools = extractSection(content, 'Avoid:');
+    return {
+      ...inference,
+      search_playbook: {
+        ...inference.search_playbook,
+        content: contentLine?.trim() || content,
+        target_companies: targetPools && targetPools !== 'Not specified' ? splitList(targetPools) : inference.search_playbook.target_companies,
+        avoid_companies_or_pools: avoidPools && avoidPools !== 'Not specified' ? splitList(avoidPools) : inference.search_playbook.avoid_companies_or_pools,
+      },
+    };
+  }
+
+  if (cardId === 'skill_table') {
+    const core = extractSection(content, 'Core:', ['Micro:', 'Frame:']);
+    const micro = extractSection(content, 'Micro:', ['Frame:']);
+    const frame = extractSection(content, 'Frame:');
+    const framedSkillTable = parseFrame(frame, inference.skill_table);
+    return {
+      ...inference,
+      skill_table: {
+        ...framedSkillTable,
+        core: core ? splitList(core) : framedSkillTable.core,
+        micro: micro ? splitList(micro) : framedSkillTable.micro,
+        sub_skills: micro ? splitList(micro).slice(0, 4) : framedSkillTable.sub_skills,
+      },
+    };
+  }
+
+  return inference;
+}
+
+export function Crystallization({
+  inputText,
+  cards,
+  setCards,
+  tensions,
+  setTensions,
+  roleSystemStore,
+  setRoleSystemStore,
+  onNext,
+}: CrystallizationProps) {
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [answerText, setAnswerText] = useState('');
@@ -212,11 +358,19 @@ export function Crystallization({ inputText, cards, setCards, tensions, setTensi
   const generateInference = useCallback(async (brief: BriefExtraction) => {
     setPipelineStatus('inferring');
     const inference = await runPrompt(buildInferenceCardsPrompt({ brief })) as InferenceCards;
-    setCards(cardsFromInference(inference));
+    const nextCards = cardsFromInference(inference);
+    setCards(nextCards);
     setTensions(tensionsFromInference(inference));
+    setRoleSystemStore({
+      approvedBrief: brief,
+      approvedInferenceCards: inference,
+      cardStatuses: Object.fromEntries(nextCards.map((card) => [card.id, card.status])),
+      cardEdits: Object.fromEntries(nextCards.map((card) => [card.id, card.content])),
+      updatedAt: new Date().toISOString(),
+    });
     setShowInferred(true);
     setPipelineStatus('ready');
-  }, [setCards, setPipelineStatus, setTensions]);
+  }, [setCards, setPipelineStatus, setRoleSystemStore, setTensions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,7 +388,7 @@ export function Crystallization({ inputText, cards, setCards, tensions, setTensi
         if (cancelled) return;
 
         setExtractedBrief(brief);
-        const missingFields = getMissingFields(brief);
+        const missingFields = getClarificationFields(brief);
 
         if (missingFields.length > 0) {
           setPipelineStatus('clarifying');
@@ -278,6 +432,14 @@ export function Crystallization({ inputText, cards, setCards, tensions, setTensi
       ) as BriefExtraction;
 
       setExtractedBrief(brief);
+      const missingFields = getClarificationFields(brief);
+      if (missingFields.length > 0) {
+        const clarification = await runPrompt(buildClarifyingQuestionsPrompt({ brief, missingFields })) as { questions: ClarifyingQuestion[] };
+        setQuestions(clarification.questions || []);
+        setPipelineStatus('needs_clarification');
+        return;
+      }
+
       await generateInference(brief);
     } catch (pipelineError) {
       const message = pipelineError instanceof Error && pipelineError.name === 'AbortError'
@@ -291,7 +453,7 @@ export function Crystallization({ inputText, cards, setCards, tensions, setTensi
   const handleRetry = async () => {
     setError(null);
 
-    if (extractedBrief && getMissingFields(extractedBrief).length === 0) {
+    if (extractedBrief && getClarificationFields(extractedBrief).length === 0) {
       await generateInference(extractedBrief as BriefExtraction);
       return;
     }
@@ -301,6 +463,11 @@ export function Crystallization({ inputText, cards, setCards, tensions, setTensi
 
   const handleCardAction = (id: string, action: 'accepted' | 'rejected' | 'pinned') => {
     setCards(prev => prev.map(c => c.id === id ? { ...c, status: action } : c));
+    setRoleSystemStore((current) => ({
+      ...current,
+      cardStatuses: { ...current.cardStatuses, [id]: action },
+      updatedAt: new Date().toISOString(),
+    }));
   };
 
   const handleEditOpen = (card: CrystallizationCardData) => {
@@ -310,6 +477,13 @@ export function Crystallization({ inputText, cards, setCards, tensions, setTensi
 
   const handleEditSave = (id: string) => {
     setCards(prev => prev.map(c => c.id === id ? { ...c, content: editContent, status: 'accepted' } : c));
+    setRoleSystemStore((current) => ({
+      ...current,
+      approvedInferenceCards: applyCardEditToInference(current.approvedInferenceCards, id, editContent),
+      cardStatuses: { ...current.cardStatuses, [id]: 'accepted' },
+      cardEdits: { ...current.cardEdits, [id]: editContent },
+      updatedAt: new Date().toISOString(),
+    }));
     setEditingCardId(null);
   };
 

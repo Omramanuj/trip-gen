@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { JourneyPlanItemData, LeverContentData, TripProposalData } from '../types';
+import { JourneyPlanItemData, LeverContentData, RoleSystemStore, TripProposalData } from '../types';
 import { AlertCircle, Check, ChevronDown, ChevronRight, Edit2, Loader2, RefreshCw, Route, Sparkles, Trash2, X } from 'lucide-react';
 import {
   buildJourneyPlannerPrompt,
@@ -13,6 +13,7 @@ import { readPromptLabResponse } from '../lib/promptLabClient';
 interface EvaluationJourneysProps {
   trips: TripProposalData[];
   setTrips: React.Dispatch<React.SetStateAction<TripProposalData[]>>;
+  roleSystemStore: RoleSystemStore;
   onNext: () => void;
 }
 
@@ -136,7 +137,7 @@ function getQuestionCountInstruction(leverId: JourneyPlanItemData['lever_id'], c
   return `EXACT CONTENT COUNT: Generate exactly ${count} ${unit}. Do not generate fewer or more task/question sub-cards. Briefing/display sub-cards do not count toward this number.`;
 }
 
-export function EvaluationJourneys({ trips, setTrips, onNext }: EvaluationJourneysProps) {
+export function EvaluationJourneys({ trips, setTrips, roleSystemStore, onNext }: EvaluationJourneysProps) {
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([
     {
       id: 'journey_plan',
@@ -177,8 +178,8 @@ export function EvaluationJourneys({ trips, setTrips, onNext }: EvaluationJourne
     try {
       const journeyPlan = await runPrompt(
         buildJourneyPlannerPrompt({
-          brief: extractedFintechBrief,
-          inferenceCards: approvedInferenceCards,
+          brief: roleSystemStore.approvedBrief || extractedFintechBrief,
+          inferenceCards: roleSystemStore.approvedInferenceCards || approvedInferenceCards,
         }),
       ) as { journeys: JourneyPlanItemData[] };
 
@@ -218,7 +219,7 @@ export function EvaluationJourneys({ trips, setTrips, onNext }: EvaluationJourne
         );
       });
     }
-  }, [updateCard]);
+  }, [roleSystemStore.approvedBrief, roleSystemStore.approvedInferenceCards, updateCard]);
 
   const runLeverGeneration = useCallback(async () => {
     const planCard = generatedCards.find((card): card is JourneyPlanGenerationCard => card.id === 'journey_plan');
@@ -269,8 +270,8 @@ export function EvaluationJourneys({ trips, setTrips, onNext }: EvaluationJourne
         const hmConstraint = [depthInstruction, countInstruction, preference?.hm_constraint?.trim()].filter(Boolean).join('\n');
         const output = await runPrompt(
           buildLeverContentPrompt({
-            brief: extractedFintechBrief,
-            inferenceCards: approvedInferenceCards,
+            brief: roleSystemStore.approvedBrief || extractedFintechBrief,
+            inferenceCards: roleSystemStore.approvedInferenceCards || approvedInferenceCards,
             journey: card.journey,
             hmConstraint,
           }),
@@ -297,7 +298,7 @@ export function EvaluationJourneys({ trips, setTrips, onNext }: EvaluationJourne
     } finally {
       setIsGeneratingLevers(false);
     }
-  }, [appendCards, generatedCards, preferences, updateCard]);
+  }, [appendCards, generatedCards, preferences, roleSystemStore.approvedBrief, roleSystemStore.approvedInferenceCards, updateCard]);
 
   useEffect(() => {
     if (hasStarted) return;

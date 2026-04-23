@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Phase, CrystallizationCardData, TensionCardData, TripProposalData, UserRole } from './types';
+import { Phase, CrystallizationCardData, RoleSystemStore, TensionCardData, TripProposalData, UserRole } from './types';
 import { MOCK_INPUT, MOCK_CRYSTALLIZATION_CARDS, MOCK_TENSION_CARDS, MOCK_TRIPS } from './mockData';
 import { TopBar } from './components/TopBar';
 import { CommandBar } from './components/CommandBar';
@@ -19,6 +19,8 @@ import { CommandSurface } from './components/CommandSurface';
 import { GlobalSidebar } from './components/GlobalSidebar';
 import { PromptLab } from './components/PromptLab';
 import { AnimatePresence, motion } from 'motion/react';
+import { approvedInferenceCards, extractedFintechBrief } from './prompts/recruitmentOsFixtures';
+import type { BriefExtraction, InferenceCards } from './prompts/recruitmentOsSchemas';
 
 export default function App() {
   const [phase, setPhase] = useState<Phase>('EXPRESS');
@@ -27,6 +29,13 @@ export default function App() {
   const [cards, setCards] = useState<CrystallizationCardData[]>(MOCK_CRYSTALLIZATION_CARDS);
   const [tensions, setTensions] = useState<TensionCardData[]>(MOCK_TENSION_CARDS);
   const [trips, setTrips] = useState<TripProposalData[]>(MOCK_TRIPS);
+  const [roleSystemStore, setRoleSystemStore] = useState<RoleSystemStore>({
+    approvedBrief: extractedFintechBrief as BriefExtraction,
+    approvedInferenceCards: approvedInferenceCards as InferenceCards,
+    cardStatuses: Object.fromEntries(MOCK_CRYSTALLIZATION_CARDS.map((card) => [card.id, card.status])),
+    cardEdits: Object.fromEntries(MOCK_CRYSTALLIZATION_CARDS.map((card) => [card.id, card.content])),
+    updatedAt: null,
+  });
 
   const isAdmin = userRole === 'HM'; // Mocking admin check based on role for now
 
@@ -65,6 +74,8 @@ export default function App() {
                       setCards={setCards}
                       tensions={tensions}
                       setTensions={setTensions}
+                      roleSystemStore={roleSystemStore}
+                      setRoleSystemStore={setRoleSystemStore}
                       onNext={() => setPhase('JOURNEY_OUTREACH')}
                     />
                   )}
@@ -77,6 +88,7 @@ export default function App() {
                     <EvaluationJourneys 
                       trips={trips} 
                       setTrips={setTrips} 
+                      roleSystemStore={roleSystemStore}
                       onNext={() => setPhase('PREVIEW')} 
                     />
                   )}

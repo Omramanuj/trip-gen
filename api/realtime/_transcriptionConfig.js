@@ -1,4 +1,4 @@
-const DEFAULT_TRANSCRIBE_MODEL = 'gpt-4o-mini-transcribe';
+const DEFAULT_TRANSCRIBE_MODEL = 'gpt-4o-transcribe';
 const DEFAULT_TRANSCRIBE_LANGUAGE = 'en';
 const DEFAULT_VAD_THRESHOLD = 0.5;
 const DEFAULT_SILENCE_DURATION_MS = 150;
