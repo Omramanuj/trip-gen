@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Briefcase, Globe } from 'lucide-react';
 
@@ -174,4 +174,3 @@ export function Launch({ onNext }: LaunchProps) {
     </div>
   );
 }
-

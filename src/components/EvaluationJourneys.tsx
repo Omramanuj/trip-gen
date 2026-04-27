@@ -1,14 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { JourneyPlanItemData, LeverContentData, RoleSystemStore, TripProposalData } from '../types';
 import { AlertCircle, Check, ChevronDown, ChevronRight, Edit2, Loader2, RefreshCw, Route, Sparkles, Trash2, X } from 'lucide-react';
-import {
-  buildJourneyPlannerPrompt,
-  buildLeverContentPrompt,
-  type PromptSpec,
-} from '../prompts/recruitmentOsPrompts';
 import { approvedInferenceCards, extractedFintechBrief } from '../prompts/recruitmentOsFixtures';
-import { readPromptLabResponse } from '../lib/promptLabClient';
+import { runPrompt as runPromptService } from '../lib/promptClient';
 
 interface EvaluationJourneysProps {
   trips: TripProposalData[];
@@ -63,25 +59,9 @@ const CONTENT_DEPTH_OPTIONS: { value: ContentDepth; label: string; description: 
   { value: 'deep', label: 'Deep', description: 'More questions and richer evidence guidance.' },
 ];
 
-async function runPrompt(spec: PromptSpec) {
-  const response = await fetch('/api/prompt-lab/run', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt_id: spec.id,
-      temperature: spec.temperature,
-      max_tokens: spec.maxOutputTokens,
-      messages: spec.messages,
-    }),
-  });
-
-  const payload = await readPromptLabResponse(response);
-
-  if (!response.ok || !payload.ok) {
-    throw new Error(payload.error || `Prompt run failed with ${response.status}`);
-  }
-
-  return payload.json;
+async function runTemplate<T>(template_key: string, inputs: Record<string, unknown>): Promise<T> {
+  const result = await runPromptService<T>({ template_key, inputs });
+  return result.output as T;
 }
 
 function riskLabel(risk: string) {
@@ -137,7 +117,7 @@ function getQuestionCountInstruction(leverId: JourneyPlanItemData['lever_id'], c
   return `EXACT CONTENT COUNT: Generate exactly ${count} ${unit}. Do not generate fewer or more task/question sub-cards. Briefing/display sub-cards do not count toward this number.`;
 }
 
-export function EvaluationJourneys({ trips, setTrips, roleSystemStore, onNext }: EvaluationJourneysProps) {
+export function EvaluationJourneys({ roleSystemStore, onNext }: EvaluationJourneysProps) {
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([
     {
       id: 'journey_plan',
@@ -176,12 +156,10 @@ export function EvaluationJourneys({ trips, setTrips, roleSystemStore, onNext }:
     setPreferences({});
 
     try {
-      const journeyPlan = await runPrompt(
-        buildJourneyPlannerPrompt({
-          brief: roleSystemStore.approvedBrief || extractedFintechBrief,
-          inferenceCards: roleSystemStore.approvedInferenceCards || approvedInferenceCards,
-        }),
-      ) as { journeys: JourneyPlanItemData[] };
+      const journeyPlan = await runTemplate<{ journeys: JourneyPlanItemData[] }>('journey_planner', {
+        brief: roleSystemStore.approvedBrief || extractedFintechBrief,
+        inferenceCards: roleSystemStore.approvedInferenceCards || approvedInferenceCards,
+      });
 
       updateCard('journey_plan', {
         status: 'complete',
@@ -268,14 +246,12 @@ export function EvaluationJourneys({ trips, setTrips, roleSystemStore, onNext }:
           preference?.question_count,
         );
         const hmConstraint = [depthInstruction, countInstruction, preference?.hm_constraint?.trim()].filter(Boolean).join('\n');
-        const output = await runPrompt(
-          buildLeverContentPrompt({
-            brief: roleSystemStore.approvedBrief || extractedFintechBrief,
-            inferenceCards: roleSystemStore.approvedInferenceCards || approvedInferenceCards,
-            journey: card.journey,
-            hmConstraint,
-          }),
-        ) as LeverContentData;
+        const output = await runTemplate<LeverContentData>(`lever_content_${card.journey.lever_id}`, {
+          brief: roleSystemStore.approvedBrief || extractedFintechBrief,
+          inferenceCards: roleSystemStore.approvedInferenceCards || approvedInferenceCards,
+          journey: card.journey,
+          hmConstraint,
+        });
         updateCard(card.id, { status: 'complete', output });
       }
 
@@ -316,10 +292,6 @@ export function EvaluationJourneys({ trips, setTrips, roleSystemStore, onNext }:
   );
 
   const canPreview = generatedLeverCards.length > 0 && generatedLeverCards.every((card) => card.status === 'complete');
-
-  const handleAction = (id: string, action: 'included' | 'removed') => {
-    setTrips(prev => prev.map(t => t.id === id ? { ...t, status: action } : t));
-  };
 
   const updatePreference = (journeyNumber: number, patch: Partial<JourneyPreference>) => {
     setPreferences((current) => ({

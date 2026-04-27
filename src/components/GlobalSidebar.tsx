@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Building, Briefcase, FileText, Users, Handshake, Link as LinkIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface GlobalSidebarProps {

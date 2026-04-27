@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { MentalMode, UserRole } from '../types';
-import { TopBar } from './TopBar';
 import { LeftRail } from './LeftRail';
 import { RightRail } from './RightRail';
 import { CenterCanvas } from './CenterCanvas';

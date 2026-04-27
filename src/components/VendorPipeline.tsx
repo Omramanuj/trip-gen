@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 type VendorStage = 'Prospect' | 'Interested' | 'Ready to Submit' | 'Client Eval';
 

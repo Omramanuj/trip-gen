@@ -8,7 +8,6 @@ interface PhaseIndicatorProps {
 
 const PHASES: { id: Phase; label: string }[] = [
   { id: 'EXPRESS', label: 'Express' },
-  { id: 'PROMPT_LAB', label: 'Prompt Lab' },
   { id: 'CRYSTALLIZE', label: 'Fine Tune' },
   { id: 'JOURNEY_OUTREACH', label: 'Outreach' },
   { id: 'EVALUATION_JOURNEYS', label: 'Evaluation Journeys' },

@@ -1,5 +1,3 @@
-import React from 'react';
-
 export function RightRail() {
   return (
     <aside className="w-[280px] shrink-0 border-l border-ink/10 bg-base/50 h-full overflow-y-auto p-5 flex flex-col gap-8 custom-scrollbar">

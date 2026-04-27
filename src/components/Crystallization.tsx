@@ -1,15 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion } from 'motion/react';
 import { CrystallizationCardData, RoleSystemStore, TensionCardData } from '../types';
 import { AlertCircle, Check, Edit2, Loader2, Mic, MicOff, RefreshCw, X } from 'lucide-react';
-import {
-  buildBriefExtractionPrompt,
-  buildClarifyingQuestionsPrompt,
-  buildInferenceCardsPrompt,
-  type PromptSpec,
-} from '../prompts/recruitmentOsPrompts';
 import { BriefExtraction, InferenceCards, mandatoryBriefFields } from '../prompts/recruitmentOsSchemas';
-import { readPromptLabResponse } from '../lib/promptLabClient';
+import { runPrompt as runPromptService } from '../lib/promptClient';
 import { useRealtimeTranscription } from '../lib/useRealtimeTranscription';
 
 interface CrystallizationProps {
@@ -30,29 +25,9 @@ type ClarifyingQuestion = {
 
 type PipelineStatus = 'idle' | 'extracting' | 'clarifying' | 'inferring' | 'ready' | 'needs_clarification' | 'error';
 
-async function runPrompt(spec: PromptSpec) {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 95000);
-
-  const response = await fetch('/api/prompt-lab/run', {
-    method: 'POST',
-    signal: controller.signal,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt_id: spec.id,
-      temperature: spec.temperature,
-      max_tokens: spec.maxOutputTokens,
-      messages: spec.messages,
-    }),
-  }).finally(() => window.clearTimeout(timeout));
-
-  const payload = await readPromptLabResponse(response);
-
-  if (!response.ok || !payload.ok) {
-    throw new Error(payload.error || `Prompt run failed with ${response.status}`);
-  }
-
-  return payload.json;
+async function runTemplate<T>(template_key: string, inputs: Record<string, unknown>): Promise<T> {
+  const result = await runPromptService<T>({ template_key, inputs });
+  return result.output as T;
 }
 
 const loadingCopy: Record<Exclude<PipelineStatus, 'idle' | 'ready' | 'needs_clarification' | 'error'>, {
@@ -309,7 +284,6 @@ export function Crystallization({
   setCards,
   tensions,
   setTensions,
-  roleSystemStore,
   setRoleSystemStore,
   onNext,
 }: CrystallizationProps) {
@@ -357,7 +331,7 @@ export function Crystallization({
 
   const generateInference = useCallback(async (brief: BriefExtraction) => {
     setPipelineStatus('inferring');
-    const inference = await runPrompt(buildInferenceCardsPrompt({ brief })) as InferenceCards;
+    const inference = await runTemplate<InferenceCards>('inference_cards', { brief });
     const nextCards = cardsFromInference(inference);
     setCards(nextCards);
     setTensions(tensionsFromInference(inference));
@@ -384,7 +358,7 @@ export function Crystallization({
       setPipelineStatus('extracting');
 
       try {
-        const brief = await runPrompt(buildBriefExtractionPrompt({ rawText: inputText, contextTags: [] })) as BriefExtraction;
+        const brief = await runTemplate<BriefExtraction>('brief_extraction', { rawText: inputText, contextTags: [] });
         if (cancelled) return;
 
         setExtractedBrief(brief);
@@ -392,7 +366,7 @@ export function Crystallization({
 
         if (missingFields.length > 0) {
           setPipelineStatus('clarifying');
-          const clarification = await runPrompt(buildClarifyingQuestionsPrompt({ brief, missingFields })) as { questions: ClarifyingQuestion[] };
+          const clarification = await runTemplate<{ questions: ClarifyingQuestion[] }>('clarifying_questions', { brief, missingFields });
           if (cancelled) return;
           setQuestions(clarification.questions || []);
           setPipelineStatus('needs_clarification');
@@ -424,17 +398,15 @@ export function Crystallization({
     setPipelineStatus('extracting');
 
     try {
-      const brief = await runPrompt(
-        buildBriefExtractionPrompt({
-          rawText: `${inputText}\n\nClarifying answers:\n${answerText}`,
-          contextTags: [],
-        }),
-      ) as BriefExtraction;
+      const brief = await runTemplate<BriefExtraction>('brief_extraction', {
+        rawText: `${inputText}\n\nClarifying answers:\n${answerText}`,
+        contextTags: [],
+      });
 
       setExtractedBrief(brief);
       const missingFields = getClarificationFields(brief);
       if (missingFields.length > 0) {
-        const clarification = await runPrompt(buildClarifyingQuestionsPrompt({ brief, missingFields })) as { questions: ClarifyingQuestion[] };
+        const clarification = await runTemplate<{ questions: ClarifyingQuestion[] }>('clarifying_questions', { brief, missingFields });
         setQuestions(clarification.questions || []);
         setPipelineStatus('needs_clarification');
         return;
@@ -487,7 +459,7 @@ export function Crystallization({
     setEditingCardId(null);
   };
 
-  const handleTensionTradeoff = (tensionId: string, tradeoffIndex: number) => {
+  const handleTensionTradeoff = (tensionId: string) => {
     setTensions(prev => prev.map(t => t.id === tensionId ? { ...t, status: 'resolved' } : t));
   };
 
@@ -710,7 +682,7 @@ export function Crystallization({
                 {tension.tradeoffs.map((tradeoff, idx) => (
                   <button 
                     key={idx}
-                    onClick={() => handleTensionTradeoff(tension.id, idx)}
+                    onClick={() => handleTensionTradeoff(tension.id)}
                     className="text-left px-4 py-2 border border-ink/10 hover:border-amber-500/50 hover:bg-amber-50/50 transition-colors text-sm font-sans flex items-center gap-3"
                   >
                     <span className="text-amber-500">→</span>

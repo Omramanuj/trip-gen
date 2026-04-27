@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import type React from 'react';
+import { Fragment, useState } from 'react';
 import { motion } from 'motion/react';
 import { TripProposalData } from '../types';
 import { Check, X, Edit2, ArrowRight } from 'lucide-react';
@@ -119,7 +120,7 @@ export function TripProposal({ trips, setTrips, onNext }: TripProposalProps) {
                 <button onClick={addCustomQuestion} className="text-[10px] font-mono text-ink-muted hover:text-ink transition-colors">+ Add</button>
               </div>
               <div className="flex flex-col gap-4">
-                {appForm.customQuestions.map((q, idx) => (
+                {appForm.customQuestions.map((q) => (
                   <div key={q.id} className="flex flex-col gap-2">
                     <input 
                       type="text" 
@@ -170,14 +171,14 @@ export function TripProposal({ trips, setTrips, onNext }: TripProposalProps) {
             {/* Journey Visualization */}
             <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2">
               {trip.blocks.map((block, idx) => (
-                <React.Fragment key={block.id}>
+                <Fragment key={block.id}>
                   <div className="px-4 py-2 border border-ink/20 bg-base font-mono text-xs text-ink">
                     {block.name}
                   </div>
                   {idx < trip.blocks.length - 1 && (
                     <ArrowRight className="w-4 h-4 text-ink-faint" />
                   )}
-                </React.Fragment>
+                </Fragment>
               ))}
             </div>
 

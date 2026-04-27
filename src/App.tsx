@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Phase, CrystallizationCardData, RoleSystemStore, TensionCardData, TripProposalData, UserRole } from './types';
-import { MOCK_INPUT, MOCK_CRYSTALLIZATION_CARDS, MOCK_TENSION_CARDS, MOCK_TRIPS } from './mockData';
+import { MOCK_CRYSTALLIZATION_CARDS, MOCK_TENSION_CARDS, MOCK_TRIPS } from './mockData';
 import { TopBar } from './components/TopBar';
 import { CommandBar } from './components/CommandBar';
 import { PhaseIndicator } from './components/PhaseIndicator';
@@ -17,8 +17,6 @@ import { RoleSystemPreview } from './components/RoleSystemPreview';
 import { Launch } from './components/Launch';
 import { CommandSurface } from './components/CommandSurface';
 import { GlobalSidebar } from './components/GlobalSidebar';
-import { PromptLab } from './components/PromptLab';
-import { AnimatePresence, motion } from 'motion/react';
 import { approvedInferenceCards, extractedFintechBrief } from './prompts/recruitmentOsFixtures';
 import type { BriefExtraction, InferenceCards } from './prompts/recruitmentOsSchemas';
 
@@ -63,10 +61,6 @@ export default function App() {
                     />
                   )}
 
-                  {phase === 'PROMPT_LAB' && (
-                    <PromptLab />
-                  )}
-                  
                   {phase === 'CRYSTALLIZE' && (
                     <Crystallization 
                       inputText={inputText}

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Phase, UserRole } from '../types';
 
 interface TopBarProps {

@@ -1,4 +1,3 @@
-import React, { useState } from 'react';
 import { MentalMode } from '../types';
 import { MOCK_CANDIDATES, MOCK_EVENTS } from '../mockCommandData';
 

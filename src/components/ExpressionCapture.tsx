@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, Check, Loader2, Zap } from 'lucide-react';
 import { MOCK_INPUT } from '../mockData';

@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'motion/react';
-import { TripProposalData } from '../types';
 
 interface JourneyAndOutreachProps {
   onNext: () => void;
